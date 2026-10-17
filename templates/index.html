@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoneyTrack - Offline Personal Finance & Budget Planner</title>
+  <!-- 100% Local Offline Bundled Libraries -->
+  <script src="{{ url_for('static', filename='vendor/tailwind.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              900: '#14532d'
+            },
+            accent: {
+              blue: '#3b82f6',
+              purple: '#8b5cf6',
+              amber: '#f59e0b',
+              rose: '#f43f5e'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+</head>
+<body class="bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col md:flex-row transition-colors duration-200">
+
+  <!-- SIDEBAR (Desktop) -->
+  <aside id="sidebar" class="hidden md:flex flex-col w-64 border-r border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 shrink-0 h-screen sticky top-0 z-30">
+    <div class="p-5 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+        </div>
+        <div>
+          <span class="font-bold text-lg tracking-tight text-slate-900 dark:text-white block leading-none">MoneyTrack</span>
+          <span class="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Offline Planner</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto p-4 space-y-1 text-sm font-medium">
+      <button onclick="MoneyTrackApp.navigateTo('dashboard')" data-nav="dashboard" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60 bg-gray-100 dark:bg-slate-800 text-brand-600 dark:text-brand-400">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Dashboard</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('money')" data-nav="money" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="12" cy="15" r="2"/></svg>
+        <span>Money & Transactions</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('goals')" data-nav="goals" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        <span>Savings Goals</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('simulator')" data-nav="simulator" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <span>Simulator & Affordability</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('calendar')" data-nav="calendar" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span>Money Calendar</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('analytics')" data-nav="analytics" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Analytics & Trends</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('learn')" data-nav="learn" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Learn & Quizzes</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('tools')" data-nav="tools" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/></svg>
+        <span>Financial Calculators</span>
+      </button>
+
+      <button onclick="MoneyTrackApp.navigateTo('settings')" data-nav="settings" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
+        <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings & Data</span>
+      </button>
+    </nav>
+
+    <div class="p-4 border-t border-gray-200 dark:border-slate-800">
+      <div class="bg-brand-50 dark:bg-slate-900/80 border border-brand-200 dark:border-brand-900/40 rounded-xl p-3">
+        <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-400 font-semibold text-xs mb-1">
+          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+          <span>100% Offline Mode</span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">All data is stored locally in your browser SQLite database.</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MOBILE TOP BAR -->
+  <header class="md:hidden flex items-center justify-between p-4 bg-white dark:bg-slate-950 border-b border-gray-200 dark:border-slate-800 sticky top-0 z-40">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold">
+        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+      </div>
+      <span class="font-bold text-slate-900 dark:text-white">MoneyTrack</span>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button onclick="MoneyTrackApp.toggleTheme()" class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800">
+        <svg id="theme-icon-mobile" class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+      <button onclick="MoneyTrackApp.toggleMobileMenu()" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+        <svg class="w-6 h-6 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- MOBILE MENU DRAWER OVERLAY -->
+  <div id="mobile-drawer" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm md:hidden">
+    <div class="w-4/5 max-w-xs bg-white dark:bg-slate-950 h-full p-5 flex flex-col space-y-4 shadow-xl">
+      <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-800">
+        <span class="font-bold text-lg text-slate-900 dark:text-white">Navigation</span>
+        <button onclick="MoneyTrackApp.toggleMobileMenu()" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-6 h-6 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="mobile-nav-container" class="flex-1 overflow-y-auto space-y-2 font-medium">
+        <!-- Replicated nav items dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN VIEWPORT CONTAINER -->
+  <div class="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+
+    <!-- MAIN TOP BAR HEADER -->
+    <header class="hidden md:flex items-center justify-between px-8 py-4 bg-white dark:bg-slate-950 border-b border-gray-200 dark:border-slate-800 sticky top-0 z-20">
+      <div>
+        <h1 id="user-greeting-heading" class="text-xl font-bold text-slate-900 dark:text-white">Good morning, {{ user.name.split(' ')[0] if user else 'Alex' }}</h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Here is your real-time financial overview and health state.</p>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <!-- Dark Mode Toggle -->
+        <button onclick="MoneyTrackApp.toggleTheme()" title="Toggle Theme" class="p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg id="theme-icon-desktop" class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </button>
+
+        <!-- Notification Bell -->
+        <div class="relative">
+          <button onclick="MoneyTrackApp.openModal('notifications-modal')" class="p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition relative">
+            <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span id="alert-badge-count" class="absolute -top-1 -right-1 bg-accent-rose text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">1</span>
+          </button>
+        </div>
+
+        <!-- User Profile Pill -->
+        <div onclick="MoneyTrackApp.navigateTo('settings')" class="flex items-center space-x-3 pl-3 border-l border-gray-200 dark:border-slate-800 cursor-pointer">
+          <div class="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 text-brand-600 dark:text-brand-400 font-semibold flex items-center justify-center border border-gray-300 dark:border-slate-700">
+            <span id="user-avatar-initials">{{ user.name[0] if user else 'A' }}</span>
+          </div>
+          <div class="text-left hidden lg:block">
+            <span id="header-user-fullname" class="block text-sm font-semibold text-slate-900 dark:text-white leading-tight">{{ user.name if user else 'Alex Taylor' }}</span>
+            <span id="header-user-status" class="block text-[11px] text-slate-400">{{ user.status if user else 'Pro Planner' }}</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENT BODY SECTION -->
+    <main class="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto space-y-8">
+
+      <!-- ========================================== -->
+      <!-- VIEW 1: DASHBOARD -->
+      <!-- ========================================== -->
+      <section id="view-dashboard" class="view-panel space-y-8 animate-fade-in">
+        
+        <!-- 4 Primary Metric Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Total Income -->
+          <div class="p-5 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Income</span>
+              <div class="p-2 rounded-xl bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400">
+                <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+              </div>
+            </div>
+            <div class="text-2xl font-bold text-slate-900 dark:text-white mb-1"><span class="currency-symbol">₹</span><span id="dash-income-val">{{ totals.income if totals else '0' }}</span></div>
+            <div class="text-xs text-brand-600 dark:text-brand-400 font-medium flex items-center space-x-1">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5H7z"/></svg>
+              <span>+8.2% vs last month</span>
+            </div>
+          </div>
+
+          <!-- Total Expenses -->
+          <div class="p-5 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Expenses</span>
+              <div class="p-2 rounded-xl bg-accent-rose/10 text-accent-rose">
+                <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+              </div>
+            </div>
+            <div class="text-2xl font-bold text-slate-900 dark:text-white mb-1"><span class="currency-symbol">₹</span><span id="dash-expense-val">{{ totals.expenses if totals else '0' }}</span></div>
+            <div class="text-xs text-accent-rose font-medium flex items-center space-x-1">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5H7z"/></svg>
+              <span>+3.4% higher spending</span>
+            </div>
+          </div>
+
+          <!-- Total Savings -->
+          <div class="p-5 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Savings</span>
+              <div class="p-2 rounded-xl bg-accent-blue/10 text-accent-blue">
+                <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              </div>
+            </div>
+            <div class="text-2xl font-bold text-slate-900 dark:text-white mb-1"><span class="currency-symbol">₹</span><span id="dash-savings-val">{{ totals.savings if totals else '0' }}</span></div>
+            <div class="text-xs text-brand-600 dark:text-brand-400 font-medium"><span id="dash-savings-rate">{{ totals.savings_rate if totals else '26.4' }}</span>% savings rate</div>
+          </div>
+
+          <!-- Current Balance -->
+          <div class="p-5 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Cash Balance</span>
+              <div class="p-2 rounded-xl bg-accent-purple/10 text-accent-purple">
+                <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>
+              </div>
+            </div>
+            <div class="text-2xl font-bold text-slate-900 dark:text-white mb-1"><span class="currency-symbol">₹</span><span id="dash-balance-val">{{ totals.balance if totals else '0' }}</span></div>
+            <div class="text-xs text-slate-400 font-medium">Safe buffer available</div>
+          </div>
+        </div>
+
+        <!-- Financial Health & Spending Analysis Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Financial Health Card (1 Col) -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  <span>Financial Health Score</span>
+                </h2>
+                <span id="health-status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300">Healthy</span>
+              </div>
+
+              <!-- Score Meter -->
+              <div class="text-center my-6">
+                <div class="inline-flex items-baseline space-x-1">
+                  <span id="health-score-num" class="text-5xl font-black text-slate-900 dark:text-white tracking-tight">78</span>
+                  <span class="text-lg text-slate-400 font-semibold">/ 100</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-slate-800 h-3 rounded-full overflow-hidden mt-3 p-0.5">
+                  <div id="health-score-bar" class="bg-brand-500 h-full rounded-full transition-all duration-700" style="width: 78%;"></div>
+                </div>
+              </div>
+
+              <!-- Health Criteria Breakdown -->
+              <div class="space-y-3 text-xs">
+                <div>
+                  <div class="flex justify-between mb-1 text-slate-600 dark:text-slate-400">
+                    <span>Savings Rate</span>
+                    <span id="health-sav-rate">26%</span>
+                  </div>
+                  <div class="w-full bg-gray-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div id="health-sav-bar" class="bg-brand-500 h-full" style="width: 85%;"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between mb-1 text-slate-600 dark:text-slate-400">
+                    <span>Budget Control</span>
+                    <span id="health-bud-ctrl">72%</span>
+                  </div>
+                  <div class="w-full bg-gray-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div id="health-bud-bar" class="bg-accent-blue h-full" style="width: 72%;"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between mb-1 text-slate-600 dark:text-slate-400">
+                    <span>Emergency Reserve</span>
+                    <span id="health-emg-res">3.5 Months</span>
+                  </div>
+                  <div class="w-full bg-gray-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div id="health-emg-bar" class="bg-accent-purple h-full" style="width: 70%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button onclick="MoneyTrackApp.openModal('health-analysis-modal')" class="w-full mt-6 py-2.5 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition">
+              View Detailed Health Analysis
+            </button>
+          </div>
+
+          <!-- Spending Analysis Card (2 Cols) -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm lg:col-span-2 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-accent-blue stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                  <span>Category Spending Breakdown</span>
+                </h2>
+                <span class="text-xs text-slate-400 font-medium">This Month</span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <!-- SVG Ring Chart -->
+                <div class="flex justify-center relative py-2">
+                  <svg id="dashboard-donut-svg" class="w-48 h-48 transform -rotate-90" viewBox="0 0 36 36">
+                    <path class="text-gray-100 dark:text-slate-800" stroke-width="3.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <!-- Food segment (Blue) -->
+                    <path class="text-accent-blue donut-segment" stroke-dasharray="35, 100" stroke-width="3.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <!-- Transport (Purple) -->
+                    <path class="text-accent-purple donut-segment" stroke-dasharray="20, 100" stroke-dashoffset="-35" stroke-width="3.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <!-- Shopping (Rose) -->
+                    <path class="text-accent-rose donut-segment" stroke-dasharray="25, 100" stroke-dashoffset="-55" stroke-width="3.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <!-- Bills (Amber) -->
+                    <path class="text-accent-amber donut-segment" stroke-dasharray="20, 100" stroke-dashoffset="-80" stroke-width="3.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <span class="text-xs text-slate-400 font-medium">Top Category</span>
+                    <span id="donut-top-category-lbl" class="text-base font-bold text-slate-900 dark:text-white">Food (35%)</span>
+                  </div>
+                </div>
+
+                <!-- Legend & Insights -->
+                <div class="space-y-3">
+                  <div id="dashboard-spending-legend" class="space-y-2 text-xs">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-accent-blue inline-block"></span>
+                        <span class="text-slate-600 dark:text-slate-300 font-medium">Food & Dining</span>
+                      </div>
+                      <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>6,440</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-accent-rose inline-block"></span>
+                        <span class="text-slate-600 dark:text-slate-300 font-medium">Shopping</span>
+                      </div>
+                      <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>4,600</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-accent-purple inline-block"></span>
+                        <span class="text-slate-600 dark:text-slate-300 font-medium">Transport</span>
+                      </div>
+                      <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>3,680</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-accent-amber inline-block"></span>
+                        <span class="text-slate-600 dark:text-slate-300 font-medium">Bills & Utilities</span>
+                      </div>
+                      <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>3,680</span>
+                    </div>
+                  </div>
+
+                  <!-- Automated Insight Box -->
+                  <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 text-xs space-y-1">
+                    <div class="font-bold text-slate-800 dark:text-slate-200">Spending Insight</div>
+                    <p id="dashboard-spending-insight-text" class="text-slate-500 dark:text-slate-400">Shopping increased 18% compared with last month. Food spending remains within expected parameters.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Budget Status & Financial Alerts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- Budget Overview Card -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm space-y-5">
+            <div class="flex items-center justify-between">
+              <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                <svg class="w-5 h-5 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span>Category Budget Limits</span>
+              </h2>
+              <button onclick="MoneyTrackApp.navigateTo('money')" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Manage</button>
+            </div>
+
+            <div id="budget-items-list" class="space-y-4">
+              <!-- Dynamically populated budget bars -->
+            </div>
+          </div>
+
+          <!-- Financial Alerts Card -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                <svg class="w-5 h-5 text-accent-rose stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span>Financial Alerts & Warnings</span>
+              </h2>
+              <span class="text-xs text-slate-400">Live Diagnostics</span>
+            </div>
+
+            <div id="dashboard-alerts-list" class="space-y-3">
+              <!-- Dynamically rendered alert cards -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 2: MONEY & TRANSACTIONS -->
+      <!-- ========================================== -->
+      <section id="view-money" class="view-panel space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Money & Transactions</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Track and categorize every income, expense, and recurring bill.</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="MoneyTrackApp.openAddAccountModal()" class="py-2 px-3.5 rounded-xl border border-dashed border-gray-300 dark:border-slate-700 hover:border-brand-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-brand-600 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm">
+              <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>+ New Account</span>
+            </button>
+            <button onclick="MoneyTrackApp.openAddTransactionModal('income')" class="py-2 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold flex items-center space-x-2 transition shadow-sm">
+              <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add Income</span>
+            </button>
+            <button onclick="MoneyTrackApp.openAddTransactionModal('expense')" class="py-2 px-4 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-semibold flex items-center space-x-2 transition shadow-sm">
+              <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add Expense</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Accounts & Wallets Grid Section -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Accounts & Wallets</span>
+              <span id="accounts-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">0</span>
+            </div>
+            <span class="text-[11px] text-slate-400">Click an account to filter ledger</span>
+          </div>
+          <div id="accounts-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- Dynamically injected account cards -->
+          </div>
+        </div>
+
+        <!-- Filter Controls Bar -->
+        <div class="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 flex flex-col md:flex-row gap-3 items-center justify-between">
+          <div class="flex items-center space-x-2 w-full md:w-auto">
+            <button onclick="MoneyTrackApp.filterTransactionsTab('all')" id="tab-btn-all" class="money-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white">All Transactions</button>
+            <button onclick="MoneyTrackApp.filterTransactionsTab('income')" id="tab-btn-income" class="money-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Income</button>
+            <button onclick="MoneyTrackApp.filterTransactionsTab('expense')" id="tab-btn-expense" class="money-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Expenses</button>
+            <button onclick="MoneyTrackApp.filterTransactionsTab('subscriptions')" id="tab-btn-subscriptions" class="money-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Subscriptions</button>
+          </div>
+
+          <div class="flex items-center space-x-3 w-full md:w-auto">
+            <!-- Search Input -->
+            <div class="relative flex-1 md:w-44">
+              <input type="text" id="tx-search-input" oninput="MoneyTrackApp.renderTransactionsTable()" placeholder="Search transactions..." class="w-full pl-8 pr-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <svg class="w-4 h-4 stroke-current text-slate-400 absolute left-2.5 top-2 fill-none stroke-2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
+
+            <!-- Account Filter Select -->
+            <select id="tx-account-filter" onchange="MoneyTrackApp.renderTransactionsTable()" class="py-1.5 px-3 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
+              <option value="ALL">All Accounts</option>
+              <!-- Injected dynamically -->
+            </select>
+
+            <!-- Category Filter Select -->
+            <select id="tx-category-filter" onchange="MoneyTrackApp.renderTransactionsTable()" class="py-1.5 px-3 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 focus:outline-none">
+              <option value="ALL">All Categories</option>
+              <option value="Food & Dining">Food & Dining</option>
+              <option value="Transport">Transport</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Bills & Utilities">Bills & Utilities</option>
+              <option value="Salary">Salary</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Transactions Table Container -->
+        <div class="rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-gray-50 dark:bg-slate-900/60 border-b border-gray-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <th class="py-3 px-4">Date</th>
+                  <th class="py-3 px-4">Description</th>
+                  <th class="py-3 px-4">Category</th>
+                  <th class="py-3 px-4">Account</th>
+                  <th class="py-3 px-4">Type</th>
+                  <th class="py-3 px-4 text-right">Amount</th>
+                  <th class="py-3 px-4 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="transactions-table-body" class="divide-y divide-gray-100 dark:divide-slate-800/60 text-xs">
+                <!-- Dynamically injected table rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty State Container -->
+          <div id="tx-empty-state" class="hidden p-8 text-center space-y-3">
+            <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+              <svg class="w-6 h-6 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+            </div>
+            <p class="font-bold text-slate-800 dark:text-slate-200">No transactions recorded yet.</p>
+            <p class="text-xs text-slate-400 max-w-sm mx-auto">Start tracking your first expense or income to keep your budget balanced.</p>
+            <button onclick="MoneyTrackApp.openAddTransactionModal('expense')" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold inline-block">Add First Transaction</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 3: SAVINGS GOALS -->
+      <!-- ========================================== -->
+      <section id="view-goals" class="view-panel space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Savings Goals</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Plan and track target funds for major life milestones.</p>
+          </div>
+          <button onclick="MoneyTrackApp.openModal('add-goal-modal')" class="py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold flex items-center space-x-2 transition shadow-sm">
+            <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Create Goal</span>
+          </button>
+        </div>
+
+        <!-- Goal Grid Container -->
+        <div id="goals-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- Goal cards rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 4: SIMULATOR & "CAN I AFFORD THIS?" -->
+      <!-- ========================================== -->
+      <section id="view-simulator" class="view-panel space-y-8 hidden">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Financial Simulator</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Test hypothetical scenarios and evaluate major financial decisions before spending.</p>
+        </div>
+
+        <!-- Navigation Tabs for Simulator -->
+        <div class="flex border-b border-gray-200 dark:border-slate-800 space-x-6 text-sm font-semibold">
+          <button onclick="MoneyTrackApp.switchSimulatorTab('scenario')" id="sim-tab-btn-scenario" class="pb-3 text-brand-600 dark:text-brand-400 border-b-2 border-brand-600">What-If Scenarios</button>
+          <button onclick="MoneyTrackApp.switchSimulatorTab('afford')" id="sim-tab-btn-afford" class="pb-3 text-slate-400 border-b-2 border-transparent hover:text-slate-600">"Can I Afford This?" Tool</button>
+        </div>
+
+        <!-- TAB A: WHAT-IF SCENARIOS -->
+        <div id="sim-panel-scenario" class="space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Controls Form -->
+            <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Scenario Parameters</h3>
+              
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Scenario Type</label>
+                <select id="sim-scenario-type" onchange="MoneyTrackApp.updateScenarioInputs()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
+                  <option value="salary">Salary Change (+ / -)</option>
+                  <option value="rent">Rent / Housing Cost Change</option>
+                  <option value="purchase">New Major Recurring Cost</option>
+                  <option value="extra_savings">Extra Monthly Savings Boost</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Current Base Income: <span class="currency-symbol">₹</span><span id="sim-curr-inc-lbl">25,000</span></label>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Simulated Monthly Change (<span class="currency-symbol">₹</span>)</label>
+                <input type="number" id="sim-change-amt" value="5000" oninput="MoneyTrackApp.runSimulation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
+              </div>
+
+              <button onclick="MoneyTrackApp.runSimulation()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Run Simulation</button>
+            </div>
+
+            <!-- Side by Side Metrics Result -->
+            <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 lg:col-span-2 space-y-6">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Before vs After Comparison</h3>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-center">
+                  <span class="text-xs text-slate-400 font-semibold uppercase">Current Monthly Savings</span>
+                  <div class="text-xl font-bold text-slate-900 dark:text-white mt-1"><span class="currency-symbol">₹</span><span id="sim-curr-savings">6,600</span></div>
+                </div>
+
+                <div class="p-4 rounded-xl bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900/50 text-center">
+                  <span class="text-xs text-brand-600 dark:text-brand-400 font-semibold uppercase">Simulated Monthly Savings</span>
+                  <div class="text-xl font-bold text-brand-700 dark:text-brand-300 mt-1"><span class="currency-symbol">₹</span><span id="sim-simulated-savings">11,600</span></div>
+                </div>
+              </div>
+
+              <!-- Comparison Table -->
+              <div class="space-y-3 text-xs">
+                <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
+                  <span class="text-slate-500">Annual Net Cash Accumulation</span>
+                  <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="sim-curr-annual">79,200</span> &rarr; <span class="currency-symbol">₹</span><span id="sim-simulated-annual">139,200</span></span>
+                </div>
+
+                <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
+                  <span class="text-slate-500">Savings Rate Impact</span>
+                  <span class="font-bold text-slate-900 dark:text-white"><span id="sim-curr-rate">26.4%</span> &rarr; <span id="sim-simulated-rate">38.6%</span></span>
+                </div>
+
+                <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
+                  <span class="text-slate-500">Goal Completion Timeline</span>
+                  <span class="font-bold text-brand-600 dark:text-brand-400"><span id="sim-goal-accel">Accelerated by 4.2 Months</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB B: CAN I AFFORD THIS? TOOL -->
+        <div id="sim-panel-afford" class="space-y-6 hidden">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Purchase Evaluator</h3>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Item / Purchase Name</label>
+                <input type="text" id="afford-item-name" value="High Performance Laptop" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Purchase Price (<span class="currency-symbol">₹</span>)</label>
+                <input type="number" id="afford-item-price" value="45000" oninput="MoneyTrackApp.evaluateAffordability()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+              </div>
+
+              <button onclick="MoneyTrackApp.evaluateAffordability()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Evaluate Numerical Impact</button>
+            </div>
+
+            <!-- Output Box -->
+            <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 lg:col-span-2 space-y-6">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Consequence & Impact Statement</h3>
+
+              <div id="afford-result-card" class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-500 uppercase">Current Emergency Reserve</span>
+                  <span class="text-sm font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="afford-curr-reserve">65,000</span></span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-500 uppercase">Reserve After Purchase</span>
+                  <span class="text-sm font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="afford-post-reserve">20,000</span></span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-500 uppercase">Emergency Coverage</span>
+                  <span class="text-sm font-bold text-accent-rose"><span id="afford-months-cov">1.1 Months</span> (Recommended: 3+ Months)</span>
+                </div>
+              </div>
+
+              <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 text-xs space-y-2">
+                <div class="font-bold text-slate-800 dark:text-slate-200">Financial Impact Summary</div>
+                <p id="afford-summary-text" class="text-slate-500 dark:text-slate-400">
+                  Making this purchase immediately reduces your total liquid cash reserves by 69.2%. It will take approximately 6.8 months of average savings to replenish this amount.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 5: MONEY CALENDAR -->
+      <!-- ========================================== -->
+      <section id="view-calendar" class="view-panel space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Future Money Calendar</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Timeline view of scheduled income, recurring bills, and projected daily balances.</p>
+          </div>
+          <button onclick="MoneyTrackApp.openModal('add-calendar-event-modal')" class="py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold flex items-center space-x-2 shadow-sm">
+            <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Add Planned Cashflow</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Calendar Timeline Feed (2 Cols) -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 lg:col-span-2 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Scheduled Cash Flow Timeline</h3>
+              <span class="text-xs text-brand-600 dark:text-brand-400 font-semibold">Projected Safe</span>
+            </div>
+
+            <div id="calendar-timeline-events" class="space-y-3">
+              <!-- Rendered timeline items -->
+            </div>
+          </div>
+
+          <!-- Monthly Projection Card (1 Col) -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">Month-End Forecast</h3>
+
+            <div class="p-4 rounded-xl bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900/40 text-center">
+              <span class="text-xs font-semibold text-brand-700 dark:text-brand-300 uppercase">Projected Net Surplus</span>
+              <div class="text-2xl font-black text-brand-700 dark:text-brand-300 mt-1"><span class="currency-symbol">₹</span><span id="cal-projected-end">11,200</span></div>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div class="flex justify-between py-1 border-b border-gray-100 dark:border-slate-800">
+                <span class="text-slate-500">Upcoming Incomes</span>
+                <span class="font-bold text-brand-600">+<span class="currency-symbol">₹</span>25,000</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-gray-100 dark:border-slate-800">
+                <span class="text-slate-500">Upcoming Fixed Obligations</span>
+                <span class="font-bold text-accent-rose">-<span class="currency-symbol">₹</span>14,200</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 6: ANALYTICS -->
+      <!-- ========================================== -->
+      <section id="view-analytics" class="view-panel space-y-8 hidden">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Analytics & Financial Trends</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Deep numerical analysis of income vs expenses and necessary vs optional spending patterns.</p>
+        </div>
+
+        <!-- Necessary vs Optional Ratio Card -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">Necessary vs Optional Spending Ratio (50/30/20 Rule)</h3>
+            <span class="text-xs text-slate-400 font-medium">Monthly Analysis</span>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs font-bold">
+              <span class="text-brand-600 dark:text-brand-400">Necessary Needs: 65% (<span class="currency-symbol">₹</span>11,960)</span>
+              <span class="text-accent-rose">Optional Wants: 35% (<span class="currency-symbol">₹</span>6,440)</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-slate-800 h-4 rounded-full overflow-hidden flex">
+              <div class="bg-brand-500 h-full" style="width: 65%;"></div>
+              <div class="bg-accent-rose h-full" style="width: 35%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart.js Trend Canvas Card -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4 shadow-sm">
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Category Expense Distribution (Offline Chart.js)</h3>
+          <div class="h-64 relative">
+            <canvas id="analytics-chart-canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- "WHAT CHANGED?" Section -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">"What Changed?" — Month-over-Month Delta</h3>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-slate-800 text-slate-400 font-bold uppercase">
+                  <th class="py-2">Category / Stream</th>
+                  <th class="py-2">Last Month</th>
+                  <th class="py-2">This Month</th>
+                  <th class="py-2">Net Change</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-slate-800/60 font-medium">
+                <tr>
+                  <td class="py-2.5 text-slate-900 dark:text-white font-semibold">Total Income</td>
+                  <td class="py-2.5 text-slate-500"><span class="currency-symbol">₹</span>23,000</td>
+                  <td class="py-2.5 text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>25,000</td>
+                  <td class="py-2.5 text-brand-600 font-bold">+<span class="currency-symbol">₹</span>2,000 (+8.7%)</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 text-slate-900 dark:text-white font-semibold">Food & Dining</td>
+                  <td class="py-2.5 text-slate-500"><span class="currency-symbol">₹</span>5,040</td>
+                  <td class="py-2.5 text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>6,440</td>
+                  <td class="py-2.5 text-accent-rose font-bold">+<span class="currency-symbol">₹</span>1,400 (+27.7%)</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 text-slate-900 dark:text-white font-semibold">Shopping</td>
+                  <td class="py-2.5 text-slate-500"><span class="currency-symbol">₹</span>2,400</td>
+                  <td class="py-2.5 text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>4,600</td>
+                  <td class="py-2.5 text-accent-rose font-bold">+<span class="currency-symbol">₹</span>2,200 (+91.6%)</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 text-slate-900 dark:text-white font-semibold">Transport</td>
+                  <td class="py-2.5 text-slate-500"><span class="currency-symbol">₹</span>4,180</td>
+                  <td class="py-2.5 text-slate-900 dark:text-white"><span class="currency-symbol">₹</span>3,680</td>
+                  <td class="py-2.5 text-brand-600 font-bold">-<span class="currency-symbol">₹</span>500 (-11.9%)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 7: LEARN & QUIZZES -->
+      <!-- ========================================== -->
+      <section id="view-learn" class="view-panel space-y-8 hidden">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Financial Literacy & Quizzes</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Master core financial concepts, test your skills, and earn achievement badges.</p>
+        </div>
+
+        <!-- Lessons Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300 uppercase">Beginner</span>
+                <span class="text-xs text-slate-400 font-medium">5 Min Read</span>
+              </div>
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Budgeting & The 50/30/20 Rule</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Learn how to divide your net income into needs, wants, and savings goals effortlessly.</p>
+            </div>
+            <button onclick="MoneyTrackApp.startQuiz(0)" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold">Start Quiz & Lesson</button>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-blue/20 text-accent-blue uppercase">Intermediate</span>
+                <span class="text-xs text-slate-400 font-medium">7 Min Read</span>
+              </div>
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">The Power of Compound Interest</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Understand exponential growth, time value of money, and how starting early builds wealth.</p>
+            </div>
+            <button onclick="MoneyTrackApp.startQuiz(1)" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold">Start Quiz & Lesson</button>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-purple/20 text-accent-purple uppercase">Essential</span>
+                <span class="text-xs text-slate-400 font-medium">4 Min Read</span>
+              </div>
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Emergency Funds & Safety Nets</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Why 3-6 months of expenses in high-liquidity accounts is vital for financial security.</p>
+            </div>
+            <button onclick="MoneyTrackApp.startQuiz(2)" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold">Start Quiz & Lesson</button>
+          </div>
+        </div>
+
+        <!-- Quiz Container Box (Hidden until triggered) -->
+        <div id="quiz-active-container" class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-brand-500 shadow-md space-y-4 hidden">
+          <div class="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+            <span id="quiz-progress-text" class="text-xs font-bold text-brand-600 dark:text-brand-400">Question 1 of 3</span>
+            <span id="quiz-score-live" class="text-xs font-bold text-slate-400">Score: 0</span>
+          </div>
+
+          <h3 id="quiz-question-title" class="text-base font-bold text-slate-900 dark:text-white">Quiz Question Title</h3>
+
+          <div id="quiz-options-list" class="space-y-2">
+            <!-- Rendered choices -->
+          </div>
+
+          <div id="quiz-feedback-box" class="p-3 rounded-xl bg-gray-50 dark:bg-slate-900 text-xs text-slate-600 dark:text-slate-300 hidden">
+            <!-- Feedback content -->
+          </div>
+
+          <div class="flex justify-end space-x-2 pt-2">
+            <button id="quiz-next-btn" onclick="MoneyTrackApp.nextQuestion()" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold hidden">Next Question</button>
+          </div>
+        </div>
+
+        <!-- Achievements Section -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Achievements & Badges</h3>
+          <div id="achievements-badges-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <!-- Rendered badges -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 8: FINANCIAL CALCULATORS -->
+      <!-- ========================================== -->
+      <section id="view-tools" class="view-panel space-y-8 hidden">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Financial Calculators</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Instant offline calculators for loans, interest, inflation, and wealth growth.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <!-- 1. EMI Calculator -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+              <svg class="w-5 h-5 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/></svg>
+              <span>EMI Loan Calculator</span>
+            </h3>
+
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">Loan Amount (<span class="currency-symbol">₹</span>)</label>
+                <input type="number" id="calc-emi-principal" value="500000" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Interest Rate (% p.a)</label>
+                  <input type="number" step="0.1" id="calc-emi-rate" value="10.5" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Tenure (Months)</label>
+                  <input type="number" id="calc-emi-months" value="36" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-500">Monthly EMI</span>
+                <span class="font-bold text-brand-600 dark:text-brand-400 text-sm"><span class="currency-symbol">₹</span><span id="res-emi-monthly">16,251</span></span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500">Total Interest Payable</span>
+                <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="res-emi-interest">85,044</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Compound Interest Calculator -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+              <svg class="w-5 h-5 text-accent-blue stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+              <span>Compound Interest Calculator</span>
+            </h3>
+
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">Initial Principal (<span class="currency-symbol">₹</span>)</label>
+                <input type="number" id="calc-ci-principal" value="100000" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Annual Rate (%)</label>
+                  <input type="number" step="0.1" id="calc-ci-rate" value="12" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Years</label>
+                  <input type="number" id="calc-ci-years" value="10" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-500">Future Total Value</span>
+                <span class="font-bold text-accent-blue text-sm"><span class="currency-symbol">₹</span><span id="res-ci-total">310,585</span></span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500">Total Interest Earned</span>
+                <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="res-ci-interest">210,585</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Inflation Calculator -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+              <svg class="w-5 h-5 text-accent-rose stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+              <span>Inflation Impact Calculator</span>
+            </h3>
+
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">Current Purchasing Cost (<span class="currency-symbol">₹</span>)</label>
+                <input type="number" id="calc-inf-cost" value="50000" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Inflation Rate (%)</label>
+                  <input type="number" step="0.1" id="calc-inf-rate" value="6.0" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Years Future</label>
+                  <input type="number" id="calc-inf-years" value="10" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-500">Future Equivalent Cost</span>
+                <span class="font-bold text-accent-rose text-sm"><span class="currency-symbol">₹</span><span id="res-inf-future">89,542</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 9: SETTINGS & OFFLINE DATA MANAGEMENT -->
+      <!-- ========================================== -->
+      <section id="view-settings" class="view-panel space-y-6 hidden">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Settings & Offline Data</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Configure profile settings, currency symbols, and export/import offline JSON snapshots.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- User Profile Settings -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">Profile & Preferences</h3>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">User Full Name</label>
+              <input type="text" id="setting-user-name" value="Alex Taylor" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Default Currency Symbol</label>
+              <select id="setting-currency-select" onchange="MoneyTrackApp.changeCurrency()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                <option value="₹">₹ (INR - Indian Rupee)</option>
+                <option value="$">$ (USD - US Dollar)</option>
+                <option value="€">€ (EUR - Euro)</option>
+                <option value="£">£ (GBP - British Pound)</option>
+              </select>
+            </div>
+
+            <button onclick="MoneyTrackApp.saveProfileSettings()" class="py-2.5 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Save Profile Settings</button>
+          </div>
+
+          <!-- Local Storage Snapshot Export/Import -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">Offline Data Backup</h3>
+            <p class="text-xs text-slate-500">Your data never leaves this machine. You can download a JSON file snapshot to back up your records or export a CSV statement.</p>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <button onclick="MoneyTrackApp.exportDataJSON()" class="py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center space-x-1.5">
+                <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Export JSON</span>
+              </button>
+
+              <button onclick="MoneyTrackApp.exportDataCSV()" class="py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center space-x-1.5">
+                <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Export CSV</span>
+              </button>
+
+              <button onclick="MoneyTrackApp.openPrintReport()" class="py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center space-x-1.5">
+                <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                <span>Print / PDF</span>
+              </button>
+
+              <label class="py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center space-x-1.5 cursor-pointer">
+                <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Import JSON</span>
+                <input type="file" id="import-json-file" accept=".json" onchange="MoneyTrackApp.importDataJSON(event)" class="hidden">
+              </label>
+            </div>
+
+            <div class="pt-4 border-t border-gray-100 dark:border-slate-800">
+              <button onclick="MoneyTrackApp.openModal('reset-data-modal')" class="py-2.5 px-4 rounded-xl bg-accent-rose/10 hover:bg-accent-rose/20 text-accent-rose text-xs font-semibold">Reset All Local Application Data</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODALS CONTAINER & POPUPS -->
+  <!-- ========================================== -->
+
+  <!-- MODAL 1: ADD TRANSACTION (INCOME / EXPENSE) -->
+  <div id="add-tx-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 id="tx-modal-title" class="text-base font-bold text-slate-900 dark:text-white">Add Expense</h3>
+        <button onclick="MoneyTrackApp.closeModal('add-tx-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="MoneyTrackApp.submitTransactionForm(event)" class="space-y-4">
+        <input type="hidden" id="tx-form-type" value="expense">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Amount (<span class="currency-symbol">₹</span>)</label>
+          <input type="number" id="tx-form-amount" required placeholder="0.00" min="1" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Description</label>
+          <input type="text" id="tx-form-desc" required placeholder="e.g. Grocery Store, Dinner, Monthly Salary" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Category</label>
+          <select id="tx-form-category" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <option value="Food & Dining">Food & Dining</option>
+            <option value="Transport">Transport</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Bills & Utilities">Bills & Utilities</option>
+            <option value="Salary">Salary</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Account / Wallet</label>
+          <select id="tx-form-account" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <!-- Dynamically populated with user accounts -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Necessity Classification</label>
+          <div class="flex items-center space-x-4 text-xs font-medium">
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="tx_type_tag" value="necessary" checked class="text-brand-600">
+              <span class="text-slate-700 dark:text-slate-300">Necessary (Need)</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="tx_type_tag" value="optional" class="text-brand-600">
+              <span class="text-slate-700 dark:text-slate-300">Optional (Want)</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Date</label>
+          <input type="date" id="tx-form-date" required class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3">
+          <button type="button" onclick="MoneyTrackApp.closeModal('add-tx-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+          <button type="submit" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Save Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: ADD SAVINGS GOAL -->
+  <div id="add-goal-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Create Savings Goal</h3>
+        <button onclick="MoneyTrackApp.closeModal('add-goal-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="MoneyTrackApp.submitGoalForm(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Goal Name</label>
+          <input type="text" id="goal-form-name" required placeholder="e.g. New Laptop, Emergency Reserve" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Target Amount (<span class="currency-symbol">₹</span>)</label>
+          <input type="number" id="goal-form-target" required min="100" placeholder="60000" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Initial Saved Deposit (<span class="currency-symbol">₹</span>)</label>
+          <input type="number" id="goal-form-current" value="0" min="0" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Target Completion Date</label>
+          <input type="date" id="goal-form-date" required class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3">
+          <button type="button" onclick="MoneyTrackApp.closeModal('add-goal-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+          <button type="submit" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Save Goal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: NOTIFICATIONS & ALERTS MODAL -->
+  <div id="notifications-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+          <svg class="w-5 h-5 text-accent-rose stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span>Notifications & Diagnostics</span>
+        </h3>
+        <button onclick="MoneyTrackApp.closeModal('notifications-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="p-3 rounded-xl bg-accent-rose/10 border border-accent-rose/20 flex items-start space-x-3">
+          <svg class="w-5 h-5 text-accent-rose shrink-0 stroke-current fill-none stroke-2 mt-0.5" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div>
+            <span class="font-bold text-slate-900 dark:text-white block">Budget Alert: Shopping</span>
+            <span class="text-slate-600 dark:text-slate-300">Shopping category has exceeded its monthly threshold by 15%.</span>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-accent-blue/10 border border-accent-blue/20 flex items-start space-x-3">
+          <svg class="w-5 h-5 text-accent-blue shrink-0 stroke-current fill-none stroke-2 mt-0.5" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <div>
+            <span class="font-bold text-slate-900 dark:text-white block">Upcoming Scheduled Payment</span>
+            <span class="text-slate-600 dark:text-slate-300">Loan EMI payment of ₹5,000 scheduled for Oct 20.</span>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-900/40 flex items-start space-x-3">
+          <svg class="w-5 h-5 text-brand-600 dark:text-brand-400 shrink-0 stroke-current fill-none stroke-2 mt-0.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          <div>
+            <span class="font-bold text-slate-900 dark:text-white block">Healthy Savings Rate</span>
+            <span class="text-slate-600 dark:text-slate-300">You are on track to exceed your monthly savings rate target.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2 text-right">
+        <button onclick="MoneyTrackApp.closeModal('notifications-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: DETAILED HEALTH ANALYSIS -->
+  <div id="health-analysis-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+          <svg class="w-5 h-5 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>Detailed Financial Health Analysis</span>
+        </h3>
+        <button onclick="MoneyTrackApp.closeModal('health-analysis-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2">
+          <div class="font-bold text-slate-900 dark:text-white text-sm">Overall Diagnostic Rating: 78 / 100 (Healthy)</div>
+          <p class="text-slate-500 dark:text-slate-400 leading-relaxed">
+            Your finances are in a robust state. Your liquid savings rate easily exceeds the recommended 20% benchmark, and your emergency buffer covers over 3 months of basic living costs.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <div class="font-semibold text-slate-900 dark:text-white">Actionable Recommendations:</div>
+          <ul class="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-300">
+            <li>Review discretionary Shopping spending to pull it back within the ₹4,000 threshold.</li>
+            <li>Maintain regular allocations to your Emergency Safety Reserve until it hits 6 full months.</li>
+            <li>Consider moving excess liquid balance beyond emergency needs into long-term compounding instruments.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="pt-2 text-right">
+        <button onclick="MoneyTrackApp.closeModal('health-analysis-modal')" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: ADD PLANNED CASHFLOW -->
+  <div id="add-calendar-event-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Add Scheduled Cashflow</h3>
+        <button onclick="MoneyTrackApp.closeModal('add-calendar-event-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="MoneyTrackApp.submitCalendarForm(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Title</label>
+          <input type="text" id="cal-form-title" required placeholder="e.g. WiFi Bill, Freelance Payout, Rent" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Type</label>
+          <select id="cal-form-type" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <option value="expense">Expense (Outflow)</option>
+            <option value="income">Income (Inflow)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Amount (<span class="currency-symbol">₹</span>)</label>
+          <input type="number" id="cal-form-amount" required min="1" placeholder="1500" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Due Date</label>
+          <input type="date" id="cal-form-date" required class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3">
+          <button type="button" onclick="MoneyTrackApp.closeModal('add-calendar-event-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+          <button type="submit" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Schedule Cashflow</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 6: RESET APPLICATION DATA -->
+  <div id="reset-data-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 class="text-base font-bold text-accent-rose flex items-center space-x-2">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Confirm Data Reset</span>
+        </h3>
+        <button onclick="MoneyTrackApp.closeModal('reset-data-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+        Are you sure you want to reset all application records? This will restore the database to the initial demonstration state. All custom transactions and goals will be cleared.
+      </p>
+
+      <div class="flex items-center justify-end space-x-2 pt-3">
+        <button type="button" onclick="MoneyTrackApp.closeModal('reset-data-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+        <button type="button" onclick="MoneyTrackApp.confirmResetDatabase()" class="py-2 px-4 rounded-xl bg-accent-rose text-white text-xs font-semibold">Yes, Reset All Data</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 7: ADD / CREATE FINANCIAL ACCOUNT -->
+  <div id="add-account-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+          <svg class="w-5 h-5 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>
+          <span>Add Financial Account</span>
+        </h3>
+        <button onclick="MoneyTrackApp.closeModal('add-account-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="MoneyTrackApp.submitAccountForm(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Account Name</label>
+          <input type="text" id="acc-form-name" required placeholder="e.g. HDFC Salary, SBI Savings, Cash Wallet, Amazon Pay" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Account Type</label>
+          <select id="acc-form-type" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <option value="savings">🏦 Savings Bank Account (Asset)</option>
+            <option value="current">🏢 Current / Checking Account (Asset)</option>
+            <option value="cash">💵 Cash / Physical Wallet (Asset)</option>
+            <option value="credit_card">💳 Credit Card (Liability / Outstanding Debt)</option>
+            <option value="wallet">📱 Digital Wallet / UPI (Asset)</option>
+            <option value="investment">📈 Investment / Demat / FD (Asset)</option>
+          </select>
+          <p class="text-[11px] text-slate-400 mt-1">Different account types track assets and liabilities with accurate balance math.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Opening Balance (<span class="currency-symbol">₹</span>)</label>
+          <input type="number" id="acc-form-balance" step="0.01" min="0" placeholder="0.00" value="0.00" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Color Theme</label>
+            <select id="acc-form-color" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+              <option value="#3B82F6">Blue</option>
+              <option value="#10B981">Green</option>
+              <option value="#6366F1">Indigo</option>
+              <option value="#F59E0B">Amber</option>
+              <option value="#8B5CF6">Purple</option>
+              <option value="#EF4444">Rose</option>
+              <option value="#64748B">Slate</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Default Account</label>
+            <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 cursor-pointer h-[38px]">
+              <input type="checkbox" id="acc-form-default" class="text-brand-600 rounded">
+              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Set as Primary</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3">
+          <button type="button" onclick="MoneyTrackApp.closeModal('add-account-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+          <button type="submit" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Local App Engine JavaScript -->
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

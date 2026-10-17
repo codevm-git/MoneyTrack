@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoneyTrack - Monthly Financial Summary Report</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+  <script src="{{ url_for('static', filename='vendor/tailwind.min.js') }}"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' },
+            accent: { blue: '#3b82f6', rose: '#f43f5e', amber: '#f59e0b', purple: '#8b5cf6' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background-color: #ffffff !important; color: #000000 !important; font-size: 11pt; }
+      .page-break { page-break-before: always; }
+      .report-card { border: 1px solid #e2e8f0 !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-slate-800 antialiased p-4 sm:p-8 font-sans">
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- Action Bar (Hidden when printing / generating PDF) -->
+    <div class="no-print flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
+      <div class="flex items-center space-x-3">
+        <a href="/" class="py-2 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-slate-700 transition flex items-center space-x-1">
+          <span>&larr; Back to App</span>
+        </a>
+        <span class="text-xs text-slate-500">Press Print or choose "Save as PDF"</span>
+      </div>
+      <button onclick="window.print()" class="py-2.5 px-5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow transition flex items-center space-x-2">
+        <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        <span>Print / Save as PDF</span>
+      </button>
+    </div>
+
+    <!-- Official Report Header -->
+    <div class="p-6 bg-white rounded-2xl border border-gray-200 shadow-sm report-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center font-black text-sm">₹</div>
+          <h1 class="text-xl font-black text-slate-900 tracking-tight">MoneyTrack — Financial Statement</h1>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Smart Financial Literacy & Budget Planner for the Public (100% Offline)</p>
+      </div>
+      <div class="text-left sm:text-right text-xs space-y-1">
+        <div><span class="text-slate-400">Profile:</span> <span class="font-bold text-slate-800">{{ user.name }}</span></div>
+        <div><span class="text-slate-400">Statement Period:</span> <span class="font-semibold text-slate-700">{{ report_month }}</span></div>
+        <div><span class="text-slate-400">Generated:</span> <span class="text-slate-600">{{ generated_date }}</span></div>
+      </div>
+    </div>
+
+    <!-- Financial Key Figures (KPIs) -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Income</div>
+        <div class="text-xl font-bold text-brand-600 mt-1">{{ user.currency }}{{ totals.income | default('0') }}</div>
+      </div>
+      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Expenses</div>
+        <div class="text-xl font-bold text-accent-rose mt-1">{{ user.currency }}{{ totals.expenses | default('0') }}</div>
+      </div>
+      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Net Savings</div>
+        <div class="text-xl font-bold text-brand-700 mt-1">{{ user.currency }}{{ totals.savings | default('0') }}</div>
+        <div class="text-[10px] text-slate-500">{{ totals.savings_rate }}% savings rate</div>
+      </div>
+      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Net Cash Balance</div>
+        <div class="text-xl font-bold text-slate-900 mt-1">{{ user.currency }}{{ totals.balance | default('0') }}</div>
+        <div class="text-[10px] text-slate-500">Health: {{ health.score }}/100 ({{ health.status }})</div>
+      </div>
+    </div>
+
+    <!-- Category Spending Breakdown & Budgets -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      
+      <!-- Category Spending -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3">
+        <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Category Spending Breakdown</h2>
+        {% if category_spending %}
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-slate-400 font-semibold border-b border-gray-100 pb-1">
+              <th class="text-left py-1.5">Category</th>
+              <th class="text-right py-1.5">Amount</th>
+              <th class="text-right py-1.5">Share</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for cat in category_spending %}
+            <tr>
+              <td class="py-1.5 font-medium text-slate-800">{{ cat.name }}</td>
+              <td class="py-1.5 text-right font-bold text-slate-900">{{ user.currency }}{{ cat.spent }}</td>
+              <td class="py-1.5 text-right text-slate-500">{{ cat.percentage }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-xs text-slate-400 py-2">No expenses recorded for this period.</p>
+        {% endif %}
+      </div>
+
+      <!-- Budget Performance -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3">
+        <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Monthly Budget Discipline</h2>
+        {% if budgets %}
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-slate-400 font-semibold border-b border-gray-100 pb-1">
+              <th class="text-left py-1.5">Category</th>
+              <th class="text-right py-1.5">Spent / Limit</th>
+              <th class="text-right py-1.5">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for b in budgets %}
+            <tr>
+              <td class="py-1.5 font-medium text-slate-800">{{ b.name }}</td>
+              <td class="py-1.5 text-right text-slate-700">{{ user.currency }}{{ b.spent }} / {{ user.currency }}{{ b.limit }}</td>
+              <td class="py-1.5 text-right font-bold text-[10px] {% if b.status == 'Exceeded' %}text-accent-rose{% elif b.status == 'Warning' %}text-accent-amber{% else %}text-brand-600{% endif %}">{{ b.status }} ({{ b.pct }}%)</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-xs text-slate-400 py-2">No budget limits configured.</p>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- Savings Goals -->
+    <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3">
+      <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Active Savings Goals</h2>
+      {% if goals %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% for g in goals %}
+        <div class="p-3 rounded-xl border border-gray-100 space-y-1.5 text-xs">
+          <div class="flex justify-between font-bold text-slate-800">
+            <span>{{ g.name }}</span>
+            <span class="text-brand-600">{{ g.pct }}%</span>
+          </div>
+          <div class="text-slate-600">{{ user.currency }}{{ g.currentAmount }} / {{ user.currency }}{{ g.targetAmount }}</div>
+          <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+            <div class="bg-brand-500 h-full" style="width: {{ g.pct }}%;"></div>
+          </div>
+          <div class="text-[10px] text-slate-400 flex justify-between">
+            <span>Remaining: {{ user.currency }}{{ g.remaining }}</span>
+            <span>Target: {{ g.date }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-xs text-slate-400">No active savings goals found.</p>
+      {% endif %}
+    </div>
+
+    <!-- Full Transaction Ledger -->
+    <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3 page-break">
+      <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Detailed Transaction Statement</h2>
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="bg-gray-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-gray-200">
+            <th class="py-2.5 px-3">Date</th>
+            <th class="py-2.5 px-3">Description</th>
+            <th class="py-2.5 px-3">Category</th>
+            <th class="py-2.5 px-3">Type</th>
+            <th class="py-2.5 px-3 text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for tx in transactions %}
+          <tr>
+            <td class="py-2 px-3 text-slate-500">{{ tx.date }}</td>
+            <td class="py-2 px-3 font-semibold text-slate-800">{{ tx.description }}</td>
+            <td class="py-2 px-3 text-slate-600">{{ tx.category }}</td>
+            <td class="py-2 px-3 capitalize text-slate-500">{{ tx.type }}</td>
+            <td class="py-2 px-3 text-right font-bold {% if tx.type == 'income' %}text-brand-600{% else %}text-slate-900{% endif %}">
+              {% if tx.type == 'income' %}+{% else %}-{% endif %}{{ user.currency }}{{ tx.amount }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer Security & Privacy Guarantee -->
+    <div class="text-center text-[11px] text-slate-400 py-4 border-t border-gray-200">
+      <p>100% Offline Ledger — MoneyTrack does not transmit your financial data over the internet.</p>
+      <p>Generated locally from SQLite database.</p>
+    </div>
+
+  </div>
+</body>
+</html>
