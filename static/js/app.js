@@ -1,8 +1,35 @@
 /**
+ * MoneyTrack Application Configuration
+ * Centralized version, stage, and application metadata
+ */
+const APP_CONFIG = {
+  name: "MoneyTrack",
+  version: "0.1.0",
+  stage: "Alpha"
+};
+
+/**
  * MoneyTrack Application Singleton
  * 100% Offline Single Page Application Engine connected to local Flask & SQLite backend.
  */
 const MoneyTrackApp = {
+  config: APP_CONFIG,
+  currentUserProfileId: parseInt(localStorage.getItem('moneytrack_active_user_id') || '0', 10),
+  usersList: [],
+  selectedAuthUser: null,
+  deleteCountdownTimer: null,
+  deleteTargetUserId: null,
+
+  escapeHtml: function(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  },
+
   state: {
     theme: 'dark',
     user: { name: 'Alex Taylor', currency: '₹' },
@@ -19,11 +46,470 @@ const MoneyTrackApp = {
     quizState: { lessonId: null, currentQ: 0, score: 0, questions: [] }
   },
 
+  renderAppVersionInfo: function() {
+    const formattedVersion = APP_CONFIG.version.startsWith('v') 
+      ? APP_CONFIG.version 
+      : `v${APP_CONFIG.version}`;
+
+    document.querySelectorAll('.app-name-display').forEach(el => {
+      el.textContent = APP_CONFIG.name;
+    });
+
+    document.querySelectorAll('.app-version-display').forEach(el => {
+      el.textContent = formattedVersion;
+    });
+
+    document.querySelectorAll('.app-stage-display').forEach(el => {
+      el.textContent = APP_CONFIG.stage;
+    });
+  },
+
   init: function() {
+    // Intercept fetch to automatically append active profile ID
+    const originalFetch = window.fetch;
+    const appSelf = this;
+    window.fetch = function(url, options = {}) {
+      if (typeof url === 'string' && url.startsWith('/api/')) {
+        options = options || {};
+        options.headers = options.headers || {};
+        if (options.headers instanceof Headers) {
+          if (appSelf.currentUserProfileId) {
+            options.headers.set('X-Profile-ID', String(appSelf.currentUserProfileId));
+          }
+        } else {
+          if (appSelf.currentUserProfileId) {
+            options.headers['X-Profile-ID'] = String(appSelf.currentUserProfileId);
+          }
+        }
+      }
+      return originalFetch(url, options);
+    };
+
+    this.renderAppVersionInfo();
     this.initTheme();
-    this.refreshAllData();
     this.initCalculators();
     this.initChart();
+    this.checkAuthState();
+  },
+
+  // --- Authentication & User Session Management ---
+  checkAuthState: function() {
+    fetch('/api/auth/users')
+      .then(r => r.json())
+      .then(data => {
+        this.usersList = data.users || [];
+        const savedUserId = parseInt(localStorage.getItem('moneytrack_active_user_id') || '0', 10);
+        const activeUser = this.usersList.find(u => u.id === savedUserId);
+
+        const authScreen = document.getElementById('auth-screen');
+        const mainShell = document.getElementById('main-app-shell');
+
+        if (activeUser) {
+          this.currentUserProfileId = activeUser.id;
+          if (authScreen) authScreen.classList.add('hidden');
+          if (mainShell) mainShell.classList.remove('hidden');
+          this.refreshAllData();
+        } else {
+          this.currentUserProfileId = 0;
+          localStorage.removeItem('moneytrack_active_user_id');
+          if (mainShell) mainShell.classList.add('hidden');
+          if (authScreen) authScreen.classList.remove('hidden');
+
+          if (this.usersList.length === 0) {
+            this.showAuthRegisterView();
+          } else {
+            this.showAuthUsersView();
+          }
+        }
+      })
+      .catch(err => {
+        console.error("Auth initialization failed:", err);
+      });
+  },
+
+  showAuthUsersView: function() {
+    const usersView = document.getElementById('auth-view-users');
+    const passView = document.getElementById('auth-view-password');
+    const regView = document.getElementById('auth-view-register');
+    if (!usersView) return;
+
+    if (this.usersList.length === 0) {
+      this.showAuthRegisterView();
+      return;
+    }
+
+    usersView.classList.remove('hidden');
+    if (passView) passView.classList.add('hidden');
+    if (regView) regView.classList.add('hidden');
+
+    const listEl = document.getElementById('auth-users-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    this.usersList.forEach(u => {
+      const initial = (u.name && u.name.length > 0) ? u.name[0].toUpperCase() : 'U';
+      const card = document.createElement('div');
+      card.className = 'p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 hover:bg-gray-100/80 dark:hover:bg-slate-800/60 transition cursor-pointer flex items-center justify-between group';
+      card.onclick = () => this.selectUserForLogin(u.id);
+
+      const safeName = this.escapeHtml(u.name);
+      const safeJsName = safeName.replace(/'/g, "\\'");
+      card.innerHTML = `
+        <div class="flex items-center space-x-3 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-bold flex items-center justify-center shrink-0">
+            ${initial}
+          </div>
+          <div class="truncate">
+            <span class="block text-sm font-bold text-slate-900 dark:text-white truncate">${safeName}</span>
+            <span class="block text-[11px] text-slate-400 font-medium">${this.escapeHtml(u.status || 'Pro Planner')} · ${u.currency || '₹'}</span>
+          </div>
+        </div>
+        <div class="flex items-center space-x-1 shrink-0">
+          <button type="button" title="Delete Account & Data" onclick="MoneyTrackApp.promptDeleteUserFromList(${u.id}, '${safeJsName}', event)" class="p-2 text-slate-400 hover:text-accent-rose opacity-60 group-hover:opacity-100 transition rounded-lg">
+            <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+          <div class="p-2 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition">
+            <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+      `;
+      listEl.appendChild(card);
+    });
+  },
+
+  selectUserForLogin: function(userId) {
+    const user = this.usersList.find(u => u.id === userId);
+    if (!user) return;
+    this.selectedAuthUser = user;
+
+    const avatarEl = document.getElementById('auth-selected-avatar');
+    const nameEl = document.getElementById('auth-selected-name');
+    const statusEl = document.getElementById('auth-selected-status');
+
+    if (avatarEl) avatarEl.textContent = (user.name && user.name.length > 0) ? user.name[0].toUpperCase() : 'U';
+    if (nameEl) nameEl.textContent = user.name;
+    if (statusEl) statusEl.textContent = user.status || 'Pro Planner';
+
+    const passInput = document.getElementById('auth-password-input');
+    if (passInput) passInput.value = '';
+    const errEl = document.getElementById('auth-login-error');
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    }
+
+    const hintEl = document.getElementById('auth-password-hint');
+    if (hintEl) {
+      if (user.id === 1 || user.name.toLowerCase() === 'alex taylor') {
+        hintEl.classList.remove('hidden');
+      } else {
+        hintEl.classList.add('hidden');
+      }
+    }
+
+    const usersView = document.getElementById('auth-view-users');
+    const regView = document.getElementById('auth-view-register');
+    const passView = document.getElementById('auth-view-password');
+
+    if (usersView) usersView.classList.add('hidden');
+    if (regView) regView.classList.add('hidden');
+    if (passView) passView.classList.remove('hidden');
+
+    if (passInput) passInput.focus();
+  },
+
+  submitLogin: function(e) {
+    if (e) e.preventDefault();
+    if (!this.selectedAuthUser) return;
+
+    const passwordInput = document.getElementById('auth-password-input');
+    const password = passwordInput ? passwordInput.value : '';
+    const errEl = document.getElementById('auth-login-error');
+
+    if (!password) {
+      if (errEl) {
+        errEl.textContent = 'Please enter your password.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profile_id: this.selectedAuthUser.id,
+        password: password
+      })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          this.currentUserProfileId = res.profile_id;
+          localStorage.setItem('moneytrack_active_user_id', String(res.profile_id));
+          const authScreen = document.getElementById('auth-screen');
+          const mainShell = document.getElementById('main-app-shell');
+          if (authScreen) authScreen.classList.add('hidden');
+          if (mainShell) mainShell.classList.remove('hidden');
+          this.refreshAllData();
+        } else {
+          if (errEl) {
+            errEl.textContent = res.error || 'Incorrect password. Please try again.';
+            errEl.classList.remove('hidden');
+          }
+          if (passwordInput) {
+            passwordInput.focus();
+            passwordInput.select();
+          }
+        }
+      })
+      .catch(err => {
+        if (errEl) {
+          errEl.textContent = 'Network or server error during sign in.';
+          errEl.classList.remove('hidden');
+        }
+      });
+  },
+
+  showAuthRegisterView: function() {
+    const usersView = document.getElementById('auth-view-users');
+    const passView = document.getElementById('auth-view-password');
+    const regView = document.getElementById('auth-view-register');
+    const backBtn = document.getElementById('auth-reg-back-btn');
+
+    if (usersView) usersView.classList.add('hidden');
+    if (passView) passView.classList.add('hidden');
+    if (regView) regView.classList.remove('hidden');
+
+    if (backBtn) {
+      if (this.usersList.length === 0) {
+        backBtn.classList.add('hidden');
+      } else {
+        backBtn.classList.remove('hidden');
+      }
+    }
+
+    const uInput = document.getElementById('reg-username-input');
+    const pInput = document.getElementById('reg-password-input');
+    const cpInput = document.getElementById('reg-confirm-password-input');
+    const errEl = document.getElementById('auth-reg-error');
+    if (uInput) uInput.value = '';
+    if (pInput) pInput.value = '';
+    if (cpInput) cpInput.value = '';
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    }
+    if (uInput) uInput.focus();
+  },
+
+  submitRegister: function(e) {
+    if (e) e.preventDefault();
+    const uInput = document.getElementById('reg-username-input');
+    const pInput = document.getElementById('reg-password-input');
+    const cpInput = document.getElementById('reg-confirm-password-input');
+    const cInput = document.getElementById('reg-currency-input');
+    const errEl = document.getElementById('auth-reg-error');
+
+    const username = uInput ? uInput.value.trim() : '';
+    const password = pInput ? pInput.value : '';
+    const confirmPass = cpInput ? cpInput.value : '';
+    const currency = cInput ? cInput.value : '₹';
+
+    if (!username) {
+      if (errEl) {
+        errEl.textContent = 'Username is required.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (username.length < 3) {
+      if (errEl) {
+        errEl.textContent = 'Username must be at least 3 characters.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (!password || password.length < 4) {
+      if (errEl) {
+        errEl.textContent = 'Password must be at least 4 characters.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (password !== confirmPass) {
+      if (errEl) {
+        errEl.textContent = 'Passwords do not match.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: username,
+        password: password,
+        currency: currency
+      })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          this.currentUserProfileId = res.profile_id;
+          localStorage.setItem('moneytrack_active_user_id', String(res.profile_id));
+          const authScreen = document.getElementById('auth-screen');
+          const mainShell = document.getElementById('main-app-shell');
+          if (authScreen) authScreen.classList.add('hidden');
+          if (mainShell) mainShell.classList.remove('hidden');
+          this.refreshAllData();
+        } else {
+          if (errEl) {
+            errEl.textContent = res.error || 'Failed to create account.';
+            errEl.classList.remove('hidden');
+          }
+        }
+      })
+      .catch(err => {
+        if (errEl) {
+          errEl.textContent = 'Server error during registration.';
+          errEl.classList.remove('hidden');
+        }
+      });
+  },
+
+  logout: function() {
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    this.currentUserProfileId = 0;
+    localStorage.removeItem('moneytrack_active_user_id');
+    const mainShell = document.getElementById('main-app-shell');
+    const authScreen = document.getElementById('auth-screen');
+    if (mainShell) mainShell.classList.add('hidden');
+    if (authScreen) authScreen.classList.remove('hidden');
+
+    fetch('/api/auth/users')
+      .then(r => r.json())
+      .then(data => {
+        this.usersList = data.users || [];
+        if (this.usersList.length === 0) {
+          this.showAuthRegisterView();
+        } else {
+          this.showAuthUsersView();
+        }
+      });
+  },
+
+  // --- 10-Second Countdown Deletion System ---
+  openDeleteUserModal: function(userId, username) {
+    this.deleteTargetUserId = userId;
+    const nameEl = document.getElementById('delete-modal-username');
+    if (nameEl) nameEl.textContent = username;
+
+    const modal = document.getElementById('delete-user-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+
+    if (this.deleteCountdownTimer) {
+      clearInterval(this.deleteCountdownTimer);
+      this.deleteCountdownTimer = null;
+    }
+
+    let seconds = 10;
+    const btn = document.getElementById('delete-user-confirm-btn');
+    const label = document.getElementById('delete-btn-label');
+    const timerText = document.getElementById('delete-countdown-timer-text');
+    const bar = document.getElementById('delete-countdown-bar');
+    const status = document.getElementById('delete-countdown-status');
+
+    if (btn) {
+      btn.disabled = true;
+      btn.className = 'py-2.5 px-4 rounded-xl bg-gray-300 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed text-xs font-semibold transition flex items-center space-x-1.5';
+    }
+    if (label) label.textContent = 'Delete in 10s';
+    if (timerText) timerText.textContent = '10s remaining';
+    if (bar) bar.style.width = '100%';
+    if (status) status.textContent = 'Please read the warning. Confirmation unlocks in 10 seconds.';
+
+    this.deleteCountdownTimer = setInterval(() => {
+      seconds--;
+      if (seconds > 0) {
+        if (timerText) timerText.textContent = seconds + 's remaining';
+        if (label) label.textContent = 'Delete in ' + seconds + 's';
+        if (bar) bar.style.width = (seconds * 10) + '%';
+      } else {
+        clearInterval(this.deleteCountdownTimer);
+        this.deleteCountdownTimer = null;
+        if (timerText) timerText.textContent = 'Safety hold complete';
+        if (bar) bar.style.width = '0%';
+        if (status) status.textContent = 'You may now permanently delete this username and all records.';
+        if (label) label.textContent = 'Permanently Delete User & All Data';
+        if (btn) {
+          btn.disabled = false;
+          btn.className = 'py-2.5 px-4 rounded-xl bg-accent-rose hover:bg-rose-700 text-white cursor-pointer shadow-sm active:scale-95 text-xs font-semibold transition flex items-center space-x-1.5';
+        }
+      }
+    }, 1000);
+  },
+
+  closeDeleteUserModal: function() {
+    if (this.deleteCountdownTimer) {
+      clearInterval(this.deleteCountdownTimer);
+      this.deleteCountdownTimer = null;
+    }
+    const modal = document.getElementById('delete-user-modal');
+    if (modal) modal.classList.add('hidden');
+    this.deleteTargetUserId = null;
+  },
+
+  confirmDeleteUserWithData: function() {
+    if (!this.deleteTargetUserId) return;
+    const targetId = this.deleteTargetUserId;
+
+    fetch(`/api/auth/users/${targetId}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          this.closeDeleteUserModal();
+          const wasActive = (targetId === this.currentUserProfileId);
+          if (wasActive) {
+            this.logout();
+          } else {
+            fetch('/api/auth/users')
+              .then(r => r.json())
+              .then(data => {
+                this.usersList = data.users || [];
+                if (this.usersList.length === 0) {
+                  this.showAuthRegisterView();
+                } else {
+                  this.showAuthUsersView();
+                }
+              });
+          }
+        } else {
+          alert(res.error || 'Failed to delete user.');
+        }
+      })
+      .catch(err => {
+        alert('Error connecting to backend: ' + err.message);
+      });
+  },
+
+  promptDeleteCurrentAccount: function() {
+    if (this.state.user && this.currentUserProfileId) {
+      this.openDeleteUserModal(this.currentUserProfileId, this.state.user.name);
+    }
+  },
+
+  promptDeleteCurrentSelectedUser: function() {
+    if (this.selectedAuthUser) {
+      this.openDeleteUserModal(this.selectedAuthUser.id, this.selectedAuthUser.name);
+    }
+  },
+
+  promptDeleteUserFromList: function(userId, username, event) {
+    if (event) event.stopPropagation();
+    this.openDeleteUserModal(userId, username);
   },
 
   initTheme: function() {
@@ -72,6 +558,8 @@ const MoneyTrackApp = {
     if (viewId === 'analytics') {
       this.updateAnalyticsChart();
     }
+
+    this.renderAppVersionInfo();
   },
 
   toggleMobileMenu: function() {
@@ -113,6 +601,7 @@ const MoneyTrackApp = {
       this.renderGoals();
       this.renderCalendar();
       this.renderAchievements();
+      this.renderAppVersionInfo();
     }).catch(err => console.error("Error refreshing data:", err));
   },
 
@@ -287,12 +776,12 @@ const MoneyTrackApp = {
     }
 
     const typeIcons = {
-      'savings': '🏦',
-      'current': '🏢',
-      'cash': '💵',
-      'credit_card': '💳',
-      'wallet': '📱',
-      'investment': '📈'
+      'savings': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 3l9 5H3l9-5z"/></svg>',
+      'current': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6z"/></svg>',
+      'cash': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>',
+      'credit_card': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+      'wallet': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M20 7h-7m-4 0H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 13h.01"/></svg>',
+      'investment': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>'
     };
 
     const typeBadgeStyles = {
@@ -305,7 +794,7 @@ const MoneyTrackApp = {
     };
 
     this.state.accounts.forEach(acc => {
-      const icon = typeIcons[acc.account_type] || '💰';
+      const icon = typeIcons[acc.account_type] || '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
       const badgeStyle = typeBadgeStyles[acc.account_type] || 'bg-gray-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-gray-200';
       const isCredit = acc.account_type === 'credit_card';
       const isNegative = acc.current_balance < 0;
@@ -495,12 +984,12 @@ const MoneyTrackApp = {
     tbody.innerHTML = '';
 
     const typeIcons = {
-      'savings': '🏦',
-      'current': '🏢',
-      'cash': '💵',
-      'credit_card': '💳',
-      'wallet': '📱',
-      'investment': '📈'
+      'savings': '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 3l9 5H3l9-5z"/></svg>',
+      'current': '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6z"/></svg>',
+      'cash': '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>',
+      'credit_card': '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+      'wallet': '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M20 7h-7m-4 0H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 13h.01"/></svg>',
+      'investment': '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>'
     };
 
     let filtered = this.state.transactions.filter(tx => {
@@ -525,7 +1014,7 @@ const MoneyTrackApp = {
       const amtColor = isIncome ? 'text-brand-600 dark:text-brand-400' : 'text-slate-900 dark:text-white';
       const sign = isIncome ? '+' : '-';
       const accName = tx.account_name || 'Unassigned';
-      const accIcon = typeIcons[tx.account_type] || '💰';
+      const accIcon = typeIcons[tx.account_type] || '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
 
       tbody.innerHTML += `
         <tr class="hover:bg-gray-50/50 dark:hover:bg-slate-900/40 transition">

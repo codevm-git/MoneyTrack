@@ -17,6 +17,82 @@ def get_current_profile_id():
         return int(header_val)
     return session.get('profile_id', 1)
 
+# --- Authentication & Username Multi-User System ---
+@api_bp.route('/auth/users', methods=['GET'])
+def get_auth_users():
+    profiles = fin_service.list_user_profiles()
+    active_id = get_current_profile_id()
+    return jsonify({
+        'users': profiles,
+        'active_user_id': active_id,
+        'logged_in': 'profile_id' in session
+    })
+
+@api_bp.route('/auth/current', methods=['GET'])
+def get_current_user():
+    active_id = get_current_profile_id()
+    user = fin_service.get_user_profile(active_id)
+    return jsonify({
+        'authenticated': 'profile_id' in session or bool(request.headers.get('X-Profile-ID')),
+        'user': user,
+        'profile_id': active_id
+    })
+
+@api_bp.route('/auth/login', methods=['POST'])
+def auth_login():
+    data = request.get_json() or {}
+    identifier = data.get('username') or data.get('profile_id')
+    password = data.get('password', '')
+    if not identifier:
+        return jsonify({'success': False, 'error': 'Username or user account selection required'}), 400
+    if not password:
+        return jsonify({'success': False, 'error': 'Password is required'}), 400
+
+    user = fin_service.authenticate_user(identifier, password)
+    if user:
+        session['profile_id'] = user['id']
+        return jsonify({'success': True, 'user': user, 'profile_id': user['id']})
+    return jsonify({'success': False, 'error': 'Incorrect password. Please try again.'}), 401
+
+@api_bp.route('/auth/register', methods=['POST'])
+def auth_register():
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password', '')
+    currency = data.get('currency', '₹')
+
+    if not username:
+        return jsonify({'success': False, 'error': 'Username cannot be empty'}), 400
+    if len(username) < 3:
+        return jsonify({'success': False, 'error': 'Username must be at least 3 characters long'}), 400
+    if not password or len(password) < 4:
+        return jsonify({'success': False, 'error': 'Password must be at least 4 characters long'}), 400
+
+    try:
+        new_id = fin_service.create_user_profile(username, currency, password)
+        session['profile_id'] = new_id
+        user = fin_service.get_user_profile(new_id)
+        return jsonify({'success': True, 'profile_id': new_id, 'user': user}), 201
+    except ValueError as ve:
+        return jsonify({'success': False, 'error': str(ve)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': f"Failed to create account: {str(e)}"}), 400
+
+@api_bp.route('/auth/logout', methods=['POST'])
+def auth_logout():
+    session.pop('profile_id', None)
+    return jsonify({'success': True})
+
+@api_bp.route('/auth/users/<int:profile_id>', methods=['DELETE'])
+def auth_delete_user(profile_id):
+    try:
+        fin_service.delete_user_profile(profile_id)
+        if session.get('profile_id') == profile_id:
+            session.pop('profile_id', None)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
 # --- Profiles & Multi-User Support ---
 @api_bp.route('/profiles', methods=['GET'])
 def list_profiles():
@@ -28,8 +104,9 @@ def create_profile():
     data = request.get_json() or {}
     name = data.get('name')
     currency = data.get('currency', '₹')
+    password = data.get('password')
     try:
-        new_id = fin_service.create_user_profile(name, currency)
+        new_id = fin_service.create_user_profile(name, currency, password)
         return jsonify({'success': True, 'id': new_id}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -38,6 +115,8 @@ def create_profile():
 def delete_profile(profile_id):
     try:
         fin_service.delete_user_profile(profile_id)
+        if session.get('profile_id') == profile_id:
+            session.pop('profile_id', None)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400

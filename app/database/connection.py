@@ -1,6 +1,14 @@
 import os
+import sys
 import sqlite3
 import json
+
+# Ensure vendor directory is in sys.path
+vendor_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'vendor')
+if os.path.isdir(vendor_dir) and vendor_dir not in sys.path:
+    sys.path.insert(0, vendor_dir)
+
+from werkzeug.security import generate_password_hash
 
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'data', 'moneytrack.db')
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schema.sql')
@@ -36,6 +44,14 @@ def init_db(db_path=None):
         if 'account_id' not in tx_cols:
             conn.execute("ALTER TABLE transactions ADD COLUMN account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;")
 
+        # Check if user_profiles table needs password_hash column migration
+        user_cols = [c[1] for c in conn.execute("PRAGMA table_info(user_profiles);").fetchall()]
+        if 'password_hash' not in user_cols:
+            conn.execute("ALTER TABLE user_profiles ADD COLUMN password_hash TEXT;")
+
+        # Ensure any profile without password_hash has default hash
+        conn.execute("UPDATE user_profiles SET password_hash = ? WHERE password_hash IS NULL;", (generate_password_hash('password123'),))
+
         # Check if already seeded
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM user_profiles;")
@@ -63,9 +79,9 @@ def seed_initial_data(conn):
     
     # 1. User Profile
     cursor.execute("""
-        INSERT OR REPLACE INTO user_profiles (id, name, currency, status) 
-        VALUES (1, 'Alex Taylor', '₹', 'Pro Planner');
-    """)
+        INSERT OR REPLACE INTO user_profiles (id, name, password_hash, currency, status) 
+        VALUES (1, 'Alex Taylor', ?, '₹', 'Pro Planner');
+    """, (generate_password_hash('password123'),))
 
     # 1.5. Accounts
     seed_default_accounts(cursor)

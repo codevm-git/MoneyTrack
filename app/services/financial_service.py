@@ -1,5 +1,14 @@
 from decimal import Decimal, ROUND_HALF_UP
 import datetime
+import os
+import sys
+
+# Ensure vendor directory is in sys.path
+vendor_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'vendor')
+if os.path.isdir(vendor_dir) and vendor_dir not in sys.path:
+    sys.path.insert(0, vendor_dir)
+
+from werkzeug.security import generate_password_hash, check_password_hash
 from app.database.connection import get_db_connection
 from app.services.validators import validate_date, validate_amount, sanitize_text
 
@@ -35,24 +44,65 @@ class FinancialService:
     def get_user_profile(self, profile_id=1):
         conn = self._get_conn()
         try:
-            row = conn.execute("SELECT * FROM user_profiles WHERE id = ?;", (profile_id,)).fetchone()
+            row = conn.execute("SELECT id, name, currency, status, is_active, created_at FROM user_profiles WHERE id = ?;", (profile_id,)).fetchone()
             if row:
                 return dict(row)
             return {'id': profile_id, 'name': 'User', 'currency': '₹', 'status': 'Pro Planner'}
         finally:
             conn.close()
 
-    def create_user_profile(self, name, currency='₹'):
+    def create_user_profile(self, name, currency='₹', password=None):
         name = sanitize_text(name, "Profile Name", min_len=1, max_len=50)
         currency = sanitize_text(currency, "Currency Symbol", min_len=1, max_len=5)
         conn = self._get_conn()
         try:
             with conn:
+                existing = conn.execute("SELECT id FROM user_profiles WHERE LOWER(name) = LOWER(?);", (name.strip(),)).fetchone()
+                if existing:
+                    raise ValueError(f"Username '{name}' is already taken.")
+
+                pw_hash = generate_password_hash(password) if password else generate_password_hash('password123')
                 cur = conn.execute("""
-                    INSERT INTO user_profiles (name, currency, status)
-                    VALUES (?, ?, 'Pro Planner');
-                """, (name, currency))
-                return cur.lastrowid
+                    INSERT INTO user_profiles (name, password_hash, currency, status)
+                    VALUES (?, ?, ?, 'Pro Planner');
+                """, (name.strip(), pw_hash, currency))
+                new_id = cur.lastrowid
+
+                # Seed initial starter accounts for the new user profile
+                starter_accounts = [
+                    (new_id, 'Main Savings Bank', 'savings', 0, '#3b82f6', 'bank', 1),
+                    (new_id, 'Cash in Hand', 'cash', 0, '#22c55e', 'cash', 0)
+                ]
+                conn.executemany("""
+                    INSERT INTO accounts (profile_id, name, account_type, initial_balance_paise, color, icon, is_default)
+                    VALUES (?, ?, ?, ?, ?, ?, ?);
+                """, starter_accounts)
+
+                return new_id
+        finally:
+            conn.close()
+
+    def authenticate_user(self, identifier, password):
+        """
+        Authenticates user by ID or Username and verifies password.
+        Returns user dictionary if valid, None if invalid.
+        """
+        conn = self._get_conn()
+        try:
+            if isinstance(identifier, int) or (isinstance(identifier, str) and identifier.isdigit()):
+                row = conn.execute("SELECT id, name, currency, status, password_hash FROM user_profiles WHERE id = ?;", (int(identifier),)).fetchone()
+            else:
+                row = conn.execute("SELECT id, name, currency, status, password_hash FROM user_profiles WHERE LOWER(name) = LOWER(?);", (str(identifier).strip(),)).fetchone()
+
+            if not row:
+                return None
+            user = dict(row)
+            stored_hash = user.get('password_hash')
+            if not stored_hash:
+                return {'id': user['id'], 'name': user['name'], 'currency': user['currency'], 'status': user['status']}
+            if check_password_hash(stored_hash, password):
+                return {'id': user['id'], 'name': user['name'], 'currency': user['currency'], 'status': user['status']}
+            return None
         finally:
             conn.close()
 

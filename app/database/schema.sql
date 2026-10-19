@@ -9,7 +9,8 @@ PRAGMA foreign_keys = ON;
 -- 1. Local User Profiles (Multi-profile ready)
 CREATE TABLE IF NOT EXISTS user_profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
     currency TEXT NOT NULL DEFAULT '₹',
     status TEXT NOT NULL DEFAULT 'Pro Planner',
     is_active INTEGER NOT NULL DEFAULT 1,
