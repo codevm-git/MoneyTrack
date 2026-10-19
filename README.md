@@ -223,8 +223,7 @@ The accounting engine was verified against the reference test dataset:
 
 ---
 
-## 10. Version & Release Readiness
+## 10. Version & Release Status
 
-- **Current Version:** `v1.0.0`
-- **Release Status:** **Stable**
-- **Recommendation:** **Approved for Stable Release.** All core financial ledger operations, 100% offline capabilities, educational lessons, interactive calculators, security safeguards, responsive design, and automated test suites are fully implemented and verified.
+- **Current Version:** `v0.1.9`
+- **Release Status:** **beta**

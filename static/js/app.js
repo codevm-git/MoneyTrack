@@ -4,8 +4,8 @@
  */
 const APP_CONFIG = {
   name: "MoneyTrack",
-  version: "0.1.0",
-  stage: "Alpha"
+  version: "0.1.9",
+  stage: "Beta"
 };
 
 /**
