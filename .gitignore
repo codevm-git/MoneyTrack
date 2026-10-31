@@ -1,3 +1,78 @@
-sample ui/
-vendor/
+# ==============================================================================
+# MoneyTrack — Git Ignore Specification
+# ==============================================================================
 
+# Project-Specific Ignored Folders
+sample ui/
+sample_ui/
+vendor/
+issues/
+git-key.txt
+
+# Python Byte-compiled / Cached Files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution & Build Artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# SQLite Database Files (Local application database and secret key auto-created on startup)
+*.db
+data/*.db
+data/moneytrack.db
+data/.secret_key
+
+# SQLite WAL, Shared-Memory, and Journal Lock Files
+*.db-wal
+*.db-shm
+*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+
+# Temporary & Test Database Files
+temp_*.db
+test_*.db
+*.tmp
+
+# Unit Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Local Environment Overrides
+.env
+.env.local
+.env.*.local
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Desktop.ini
+
+# Editor & IDE Directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

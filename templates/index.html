@@ -36,6 +36,28 @@
 </head>
 <body class="bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col md:flex-row transition-colors duration-200">
 
+  <!-- STARTUP LOADING SCREEN -->
+  <div id="startup-loader" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white dark:bg-slate-950 transition-opacity duration-300">
+    <div class="flex flex-col items-center space-y-4">
+      <div class="relative w-16 h-16 flex items-center justify-center">
+        <div class="absolute inset-0 rounded-2xl bg-brand-600/20 animate-ping"></div>
+        <div class="w-14 h-14 rounded-2xl bg-brand-600 text-white flex items-center justify-center shadow-lg relative">
+          <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+        </div>
+      </div>
+      <div class="text-center space-y-1">
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">MoneyTrack</h2>
+        <p class="text-xs text-slate-400 font-medium">Smart Financial Literacy &amp; Budget Planner</p>
+      </div>
+      <div class="w-36 h-1.5 bg-gray-200 dark:bg-slate-800 rounded-full overflow-hidden mt-2">
+        <div class="h-full bg-brand-500 rounded-full w-2/3 animate-pulse"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IN-APP LAZY LOADING PROGRESS INDICATOR -->
+  <div id="in-app-loader" class="hidden fixed top-0 left-0 right-0 h-1 bg-brand-500 z-50 animate-pulse transition-all"></div>
+
   <!-- ========================================== -->
   <!-- AUTHENTICATION & USERNAME LOGIN / REGISTRATION SCREEN -->
   <!-- ========================================== -->
@@ -289,7 +311,7 @@
     <!-- MAIN TOP BAR HEADER -->
     <header class="hidden md:flex items-center justify-between px-8 py-4 bg-white dark:bg-slate-950 border-b border-gray-200 dark:border-slate-800 sticky top-0 z-20">
       <div>
-        <h1 id="user-greeting-heading" class="text-xl font-bold text-slate-900 dark:text-white">Good morning, {{ user.name.split(' ')[0] if user else 'Alex' }}</h1>
+        <h1 id="user-greeting-heading" class="text-xl font-bold text-slate-900 dark:text-white">Welcome</h1>
         <p class="text-xs text-slate-500 dark:text-slate-400">Here is your real-time financial overview and health state.</p>
       </div>
 
@@ -303,7 +325,7 @@
         <div class="relative">
           <button onclick="MoneyTrackApp.openModal('notifications-modal')" class="p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition relative">
             <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            <span id="alert-badge-count" class="absolute -top-1 -right-1 bg-accent-rose text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">1</span>
+            <span id="alert-badge-count" class="hidden absolute -top-1 -right-1 bg-accent-rose text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
           </button>
         </div>
 
@@ -582,6 +604,10 @@
               <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span>+ New Account</span>
             </button>
+            <button onclick="MoneyTrackApp.openTransferModal()" class="py-2 px-3.5 rounded-xl border border-gray-300 dark:border-slate-700 hover:border-brand-500 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-brand-600 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm">
+              <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16"/></svg>
+              <span>Transfer Funds</span>
+            </button>
             <button onclick="MoneyTrackApp.openAddTransactionModal('income')" class="py-2 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold flex items-center space-x-2 transition shadow-sm">
               <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span>Add Income</span>
@@ -747,9 +773,9 @@
                   <div class="text-xl font-bold text-slate-900 dark:text-white mt-1"><span class="currency-symbol">₹</span><span id="sim-curr-savings">6,600</span></div>
                 </div>
 
-                <div class="p-4 rounded-xl bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900/50 text-center">
-                  <span class="text-xs text-brand-600 dark:text-brand-400 font-semibold uppercase">Simulated Monthly Savings</span>
-                  <div class="text-xl font-bold text-brand-700 dark:text-brand-300 mt-1"><span class="currency-symbol">₹</span><span id="sim-simulated-savings">11,600</span></div>
+                <div id="sim-simulated-savings-card" class="p-4 rounded-xl bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900/50 text-center transition-colors">
+                  <span id="sim-simulated-savings-label" class="text-xs text-brand-600 dark:text-brand-400 font-semibold uppercase">Simulated Monthly Savings</span>
+                  <div id="sim-simulated-savings-num" class="text-xl font-bold text-brand-700 dark:text-brand-300 mt-1"><span class="currency-symbol">₹</span><span id="sim-simulated-savings">11,600</span></div>
                 </div>
               </div>
 
@@ -767,7 +793,7 @@
 
                 <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
                   <span class="text-slate-500">Goal Completion Timeline</span>
-                  <span class="font-bold text-brand-600 dark:text-brand-400"><span id="sim-goal-accel">Accelerated by 4.2 Months</span></span>
+                  <span id="sim-goal-accel-pill" class="font-bold text-brand-600 dark:text-brand-400"><span id="sim-goal-accel">Accelerated by 4.2 Months</span></span>
                 </div>
               </div>
             </div>
@@ -810,7 +836,7 @@
 
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-bold text-slate-500 uppercase">Emergency Coverage</span>
-                  <span class="text-sm font-bold text-accent-rose"><span id="afford-months-cov">1.1 Months</span> (Recommended: 3+ Months)</span>
+                  <span id="afford-coverage-container" class="text-sm font-bold text-slate-900 dark:text-white"><span id="afford-months-cov">1.1 Months</span> <span id="afford-cov-badge" class="text-xs font-normal text-slate-400">(Recommended: 3+ Months)</span></span>
                 </div>
               </div>
 
@@ -1250,9 +1276,6 @@
               </label>
             </div>
 
-            <div class="pt-4 border-t border-gray-100 dark:border-slate-800">
-              <button onclick="MoneyTrackApp.openModal('reset-data-modal')" class="py-2.5 px-4 rounded-xl bg-accent-rose/10 hover:bg-accent-rose/20 text-accent-rose text-xs font-semibold">Reset All Local Application Data</button>
-            </div>
           </div>
         </div>
       </section>
@@ -1307,7 +1330,7 @@
           </select>
         </div>
 
-        <div>
+        <div id="tx-form-necessity-container">
           <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Necessity Classification</label>
           <div class="flex items-center space-x-4 text-xs font-medium">
             <label class="flex items-center space-x-2 cursor-pointer">
@@ -1356,8 +1379,16 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Initial Saved Deposit (<span class="currency-symbol">₹</span>)</label>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Initial Saved Deposit (<span class="currency-symbol">₹</span>, Optional)</label>
           <input type="number" id="goal-form-current" value="0" min="0" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Fund From Account / Wallet (Optional)</label>
+          <select id="goal-form-account" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <option value="">Do not deduct from an account</option>
+            <!-- Dynamically populated with accounts -->
+          </select>
         </div>
 
         <div>
@@ -1386,30 +1417,8 @@
         </button>
       </div>
 
-      <div class="space-y-3 text-xs">
-        <div class="p-3 rounded-xl bg-accent-rose/10 border border-accent-rose/20 flex items-start space-x-3">
-          <svg class="w-5 h-5 text-accent-rose shrink-0 stroke-current fill-none stroke-2 mt-0.5" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <div>
-            <span class="font-bold text-slate-900 dark:text-white block">Budget Alert: Shopping</span>
-            <span class="text-slate-600 dark:text-slate-300">Shopping category has exceeded its monthly threshold by 15%.</span>
-          </div>
-        </div>
-
-        <div class="p-3 rounded-xl bg-accent-blue/10 border border-accent-blue/20 flex items-start space-x-3">
-          <svg class="w-5 h-5 text-accent-blue shrink-0 stroke-current fill-none stroke-2 mt-0.5" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-          <div>
-            <span class="font-bold text-slate-900 dark:text-white block">Upcoming Scheduled Payment</span>
-            <span class="text-slate-600 dark:text-slate-300">Loan EMI payment of ₹5,000 scheduled for Oct 20.</span>
-          </div>
-        </div>
-
-        <div class="p-3 rounded-xl bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-900/40 flex items-start space-x-3">
-          <svg class="w-5 h-5 text-brand-600 dark:text-brand-400 shrink-0 stroke-current fill-none stroke-2 mt-0.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          <div>
-            <span class="font-bold text-slate-900 dark:text-white block">Healthy Savings Rate</span>
-            <span class="text-slate-600 dark:text-slate-300">You are on track to exceed your monthly savings rate target.</span>
-          </div>
-        </div>
+      <div id="notifications-modal-list" class="space-y-3 text-xs">
+        <!-- Dynamically rendered notification cards -->
       </div>
 
       <div class="pt-2 text-right">
@@ -1497,27 +1506,90 @@
     </div>
   </div>
 
-  <!-- MODAL 6: RESET APPLICATION DATA -->
-  <div id="reset-data-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <!-- MODAL: TRANSFER FUNDS BETWEEN ACCOUNTS / WALLETS -->
+  <div id="transfer-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
-        <h3 class="text-base font-bold text-accent-rose flex items-center space-x-2">
-          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span>Confirm Data Reset</span>
+        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+          <svg class="w-5 h-5 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16"/></svg>
+          <span>Transfer Funds</span>
         </h3>
-        <button onclick="MoneyTrackApp.closeModal('reset-data-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+        <button onclick="MoneyTrackApp.closeModal('transfer-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
           <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
-      <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-        Are you sure you want to reset all application records? This will restore the database to the initial demonstration state. All custom transactions and goals will be cleared.
-      </p>
+      <form onsubmit="MoneyTrackApp.submitTransferForm(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Source Account / Wallet (From)</label>
+          <select id="transfer-form-from" required class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <!-- Dynamically populated with user accounts -->
+          </select>
+        </div>
 
-      <div class="flex items-center justify-end space-x-2 pt-3">
-        <button type="button" onclick="MoneyTrackApp.closeModal('reset-data-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
-        <button type="button" onclick="MoneyTrackApp.confirmResetDatabase()" class="py-2 px-4 rounded-xl bg-accent-rose text-white text-xs font-semibold">Yes, Reset All Data</button>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Destination Account / Wallet (To)</label>
+          <select id="transfer-form-to" required class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <!-- Dynamically populated with user accounts -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Transfer Amount (<span class="currency-symbol">₹</span>)</label>
+          <input type="number" id="transfer-form-amount" required min="1" step="0.01" placeholder="0.00" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Transfer Date</label>
+          <input type="date" id="transfer-form-date" required class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Description / Note (Optional)</label>
+          <input type="text" id="transfer-form-desc" placeholder="e.g. ATM Cash Withdrawal, Wallet Load, Bank Transfer" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+        </div>
+
+        <div id="transfer-form-error" class="hidden p-2.5 rounded-xl bg-accent-rose/10 border border-accent-rose/30 text-accent-rose text-xs font-medium"></div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3">
+          <button type="button" onclick="MoneyTrackApp.closeModal('transfer-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+          <button type="submit" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Execute Transfer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: GOAL ACTION (DEPOSIT / WITHDRAW) -->
+  <div id="goal-action-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+        <h3 id="goal-action-modal-title" class="text-base font-bold text-slate-900 dark:text-white">Deposit to Goal</h3>
+        <button onclick="MoneyTrackApp.closeModal('goal-action-modal')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
+
+      <form onsubmit="MoneyTrackApp.submitGoalAction(event)" class="space-y-4">
+        <input type="hidden" id="goal-action-id">
+        <input type="hidden" id="goal-action-type" value="deposit">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Amount (<span class="currency-symbol">₹</span>)</label>
+          <input type="number" id="goal-action-amount" required min="1" step="0.01" placeholder="1000.00" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+        </div>
+
+        <div>
+          <label id="goal-action-account-label" class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Account / Wallet</label>
+          <select id="goal-action-account" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
+            <!-- Dynamically populated with accounts -->
+          </select>
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3">
+          <button type="button" onclick="MoneyTrackApp.closeModal('goal-action-modal')" class="py-2 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+          <button type="submit" id="goal-action-submit-btn" class="py-2 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Confirm Deposit</button>
+        </div>
+      </form>
     </div>
   </div>
 

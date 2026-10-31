@@ -177,11 +177,23 @@ class FinancialService:
                 ).fetchone()
                 outflow_paise = outflow_row['total'] or 0 if outflow_row else 0
 
+                tr_out_row = conn.execute(
+                    "SELECT SUM(amount_paise) as total FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'transfer';",
+                    (profile_id, acc_id)
+                ).fetchone()
+                tr_out_paise = tr_out_row['total'] or 0 if tr_out_row else 0
+
+                tr_in_row = conn.execute(
+                    "SELECT SUM(amount_paise) as total FROM transactions WHERE profile_id = ? AND destination_account_id = ? AND type = 'transfer';",
+                    (profile_id, acc_id)
+                ).fetchone()
+                tr_in_paise = tr_in_row['total'] or 0 if tr_in_row else 0
+
                 if acc_type == 'credit_card':
-                    # For credit cards, balance is net liability (expenses charged minus payments/income)
-                    current_paise = outflow_paise - inflow_paise
+                    # For credit cards, balance is net liability (expenses charged minus payments/transfers to card)
+                    current_paise = (outflow_paise - inflow_paise) - tr_in_paise + tr_out_paise
                 else:
-                    current_paise = initial_paise + inflow_paise - outflow_paise
+                    current_paise = initial_paise + inflow_paise - outflow_paise + tr_in_paise - tr_out_paise
 
                 meta = self.ACCOUNT_TYPE_META.get(acc_type, {'label': acc_type.capitalize(), 'icon': 'bank', 'badge_class': 'bg-slate-100 text-slate-700'})
 
@@ -197,8 +209,8 @@ class FinancialService:
                     'initial_balance': paise_to_rupees(initial_paise),
                     'current_balance': paise_to_rupees(current_paise),
                     'current_balance_paise': current_paise,
-                    'total_inflow': paise_to_rupees(inflow_paise),
-                    'total_outflow': paise_to_rupees(outflow_paise)
+                    'total_inflow': paise_to_rupees(inflow_paise + tr_in_paise),
+                    'total_outflow': paise_to_rupees(outflow_paise + tr_out_paise)
                 })
             return accounts
         finally:
@@ -277,6 +289,42 @@ class FinancialService:
         finally:
             conn.close()
 
+    def transfer_funds(self, profile_id, from_account_id, to_account_id, amount_rupees, date=None, description=None):
+        from_account_id = int(from_account_id)
+        to_account_id = int(to_account_id)
+        if from_account_id == to_account_id:
+            raise ValueError("Source and destination accounts must be different.")
+        
+        amount_rupees = validate_amount(amount_rupees, "Transfer Amount", min_val=1.0)
+        date = validate_date(date) if date else datetime.date.today().strftime('%Y-%m-%d')
+        amount_paise = rupees_to_paise(amount_rupees)
+        
+        conn = self._get_conn()
+        try:
+            with conn:
+                from_acc = conn.execute("SELECT name FROM accounts WHERE id = ? AND profile_id = ?;", (from_account_id, profile_id)).fetchone()
+                to_acc = conn.execute("SELECT name FROM accounts WHERE id = ? AND profile_id = ?;", (to_account_id, profile_id)).fetchone()
+                if not from_acc or not to_acc:
+                    raise ValueError("One or both selected accounts do not exist.")
+                
+                desc = sanitize_text(description or f"Transfer: {from_acc['name']} -> {to_acc['name']}", "Description", 1, 250)
+                
+                cat = conn.execute("SELECT id FROM categories WHERE name = 'Transfer' COLLATE NOCASE;").fetchone()
+                if cat:
+                    cat_id = cat['id']
+                else:
+                    cat_res = conn.execute("INSERT INTO categories (name, type, color, icon) VALUES ('Transfer', 'both', '#6366f1', 'repeat');")
+                    cat_id = cat_res.lastrowid
+                
+                cursor = conn.execute("""
+                    INSERT INTO transactions (profile_id, account_id, destination_account_id, date, description, category_id, type, type_tag, amount_paise)
+                    VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'necessary', ?);
+                """, (profile_id, from_account_id, to_account_id, date, desc, cat_id, amount_paise))
+                
+                return cursor.lastrowid
+        finally:
+            conn.close()
+
     # --- Financial Ledger Totals & Balances ---
     def get_ledger_totals(self, profile_id=1, month_year=None):
         """
@@ -308,6 +356,26 @@ class FinancialService:
             ).fetchone()
             total_goals_savings_paise = goals_row['total'] or 0 if goals_row else 0
 
+            # Calculate actual liquid balance across all asset accounts (opening balance + net transactions + transfers)
+            acc_rows = conn.execute("""
+                SELECT id, account_type, initial_balance_paise FROM accounts WHERE profile_id = ?;
+            """, (profile_id,)).fetchall()
+            total_asset_balance_paise = 0
+            total_initial_paise = 0
+            for ar in acc_rows:
+                aid = ar['id']
+                atype = ar['account_type']
+                init_p = ar['initial_balance_paise'] or 0
+                total_initial_paise += init_p
+                if atype != 'credit_card':
+                    inc_row = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'income';", (profile_id, aid)).fetchone()
+                    exp_row = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'expense';", (profile_id, aid)).fetchone()
+                    tr_in = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND destination_account_id = ? AND type = 'transfer';", (profile_id, aid)).fetchone()
+                    tr_out = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'transfer';", (profile_id, aid)).fetchone()
+                    
+                    cur_p = init_p + ((inc_row['s'] if inc_row else 0) or 0) - ((exp_row['s'] if exp_row else 0) or 0) + ((tr_in['s'] if tr_in else 0) or 0) - ((tr_out['s'] if tr_out else 0) or 0)
+                    total_asset_balance_paise += cur_p
+
             balance_paise = income_paise - expenses_paise
             savings_paise = max(0, income_paise - expenses_paise)
 
@@ -319,12 +387,15 @@ class FinancialService:
                 'income': paise_to_rupees(income_paise),
                 'expenses': paise_to_rupees(expenses_paise),
                 'balance': paise_to_rupees(balance_paise),
+                'total_balance': paise_to_rupees(total_asset_balance_paise) if acc_rows else paise_to_rupees(balance_paise),
+                'opening_balance': paise_to_rupees(total_initial_paise),
                 'savings': paise_to_rupees(savings_paise),
                 'savings_goals_total': paise_to_rupees(total_goals_savings_paise),
                 'savings_rate': savings_rate,
                 'income_paise': income_paise,
                 'expenses_paise': expenses_paise,
-                'balance_paise': balance_paise
+                'balance_paise': balance_paise,
+                'total_balance_paise': total_asset_balance_paise
             }
         finally:
             conn.close()
@@ -334,12 +405,14 @@ class FinancialService:
         conn = self._get_conn()
         try:
             sql = """
-                SELECT t.id, t.date, t.description, t.type, t.type_tag, t.amount_paise, t.account_id,
+                SELECT t.id, t.date, t.description, t.type, t.type_tag, t.amount_paise, t.account_id, t.destination_account_id,
                        c.id as category_id, c.name as category, c.color as category_color,
-                       a.name as account_name, a.account_type, a.color as account_color
+                       a.name as account_name, a.account_type, a.color as account_color,
+                       dest.name as dest_name, dest.account_type as dest_type
                 FROM transactions t
                 JOIN categories c ON t.category_id = c.id
                 LEFT JOIN accounts a ON t.account_id = a.id
+                LEFT JOIN accounts dest ON t.destination_account_id = dest.id
                 WHERE t.profile_id = ?
             """
             params = [profile_id]
@@ -348,6 +421,8 @@ class FinancialService:
                 sql += " AND t.type = 'income'"
             elif filter_type == 'expense':
                 sql += " AND t.type = 'expense'"
+            elif filter_type == 'transfer':
+                sql += " AND t.type = 'transfer'"
             elif filter_type == 'subscriptions':
                 sql += " AND (c.name = 'Bills & Utilities' OR LOWER(t.description) LIKE '%sub%' OR LOWER(t.description) LIKE '%pass%')"
 
@@ -356,8 +431,8 @@ class FinancialService:
                 params.append(category)
 
             if account_id and str(account_id) != 'ALL':
-                sql += " AND t.account_id = ?"
-                params.append(account_id)
+                sql += " AND (t.account_id = ? OR t.destination_account_id = ?)"
+                params.extend([account_id, account_id])
 
             if search:
                 sql += " AND (LOWER(t.description) LIKE ? OR LOWER(c.name) LIKE ?)"
@@ -369,6 +444,10 @@ class FinancialService:
 
             result = []
             for r in rows:
+                acc_name = r['account_name'] or 'Account'
+                if r['type'] == 'transfer' and r['dest_name']:
+                    acc_name = f"{r['account_name'] or 'Account'} \u2192 {r['dest_name']}"
+
                 result.append({
                     'id': str(r['id']),
                     'date': r['date'],
@@ -377,7 +456,8 @@ class FinancialService:
                     'category': r['category'],
                     'category_color': r['category_color'],
                     'account_id': str(r['account_id']) if r['account_id'] else None,
-                    'account_name': r['account_name'] or 'Main Bank Account',
+                    'destination_account_id': str(r['destination_account_id']) if r['destination_account_id'] else None,
+                    'account_name': acc_name,
                     'account_type': r['account_type'] or 'savings',
                     'type': r['type'],
                     'typeTag': r['type_tag'],
@@ -388,7 +468,7 @@ class FinancialService:
         finally:
             conn.close()
 
-    def add_transaction(self, profile_id, date, description, category_name_or_id=None, tx_type='expense', type_tag='necessary', amount_rupees=None, account_id=None, amount=None, category=None, category_name=None):
+    def add_transaction(self, profile_id, date, description, category_name_or_id=None, tx_type='expense', type_tag='necessary', amount_rupees=None, account_id=None, destination_account_id=None, amount=None, category=None, category_name=None):
         if amount_rupees is None and amount is not None:
             amount_rupees = amount
         if category_name_or_id is None:
@@ -430,9 +510,9 @@ class FinancialService:
 
                 amount_paise = rupees_to_paise(amount_rupees)
                 cursor = conn.execute("""
-                    INSERT INTO transactions (profile_id, account_id, date, description, category_id, type, type_tag, amount_paise)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-                """, (profile_id, account_id, date, description, cat_id, tx_type, type_tag, amount_paise))
+                    INSERT INTO transactions (profile_id, account_id, destination_account_id, date, description, category_id, type, type_tag, amount_paise)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """, (profile_id, account_id, destination_account_id, date, description, cat_id, tx_type, type_tag, amount_paise))
 
                 # Check if first entry achievement needs to be unlocked
                 conn.execute("""
@@ -673,11 +753,16 @@ class FinancialService:
         finally:
             conn.close()
 
-    def add_goal(self, profile_id, name, target_rupees, current_rupees, target_date):
+    def add_goal(self, profile_id, name, target_rupees, current_rupees=0, target_date=None, target_amount=None, current_amount=None, account_id=None):
+        if target_rupees is None and target_amount is not None:
+            target_rupees = target_amount
+        if current_rupees is None and current_amount is not None:
+            current_rupees = current_amount
+        current_rupees = current_rupees or 0
         name = sanitize_text(name, "Goal Name", 1, 100)
         target_rupees = validate_amount(target_rupees, "Target Amount", min_val=1.0)
         current_rupees = validate_amount(current_rupees, "Initial Deposit", min_val=0.0)
-        target_date = validate_date(target_date)
+        target_date = validate_date(target_date) if target_date else datetime.date.today().strftime('%Y-%m-%d')
 
         conn = self._get_conn()
         try:
@@ -688,33 +773,63 @@ class FinancialService:
                     INSERT INTO savings_goals (profile_id, name, target_amount_paise, current_amount_paise, target_date, status)
                     VALUES (?, ?, ?, ?, ?, 'active');
                 """, (profile_id, name, target_paise, current_paise, target_date))
+                new_goal_id = cur.lastrowid
+
+                # If initial deposit came from an account, record transaction
+                if current_rupees > 0 and account_id:
+                    cat = conn.execute("SELECT id FROM categories WHERE name = 'Other' COLLATE NOCASE;").fetchone()
+                    cat_id = cat['id'] if cat else 1
+                    today = datetime.date.today().strftime('%Y-%m-%d')
+                    conn.execute("""
+                        INSERT INTO transactions (profile_id, account_id, date, description, category_id, type, type_tag, amount_paise)
+                        VALUES (?, ?, ?, ?, ?, 'expense', 'savings', ?);
+                    """, (profile_id, int(account_id), today, f"Initial Deposit: {name}", cat_id, current_paise))
 
                 # Unlock goal setter badge
                 conn.execute("""
                     INSERT OR IGNORE INTO user_achievements (profile_id, achievement_id)
                     SELECT ?, id FROM achievements WHERE code = 'goal_setter';
                 """, (profile_id,))
-                return cur.lastrowid
+                return new_goal_id
         finally:
             conn.close()
 
-    def deposit_goal(self, profile_id, goal_id, deposit_rupees=1000):
+    def deposit_goal(self, profile_id, goal_id, deposit_rupees=1000, amount=None, account_id=None):
+        if amount is not None:
+            deposit_rupees = amount
         deposit_rupees = validate_amount(deposit_rupees, "Deposit Amount", min_val=1.0)
         conn = self._get_conn()
         try:
             with conn:
+                goal = conn.execute("SELECT id, name, target_amount_paise, current_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;", (goal_id, profile_id)).fetchone()
+                if not goal:
+                    raise ValueError("Goal not found.")
+
                 deposit_paise = rupees_to_paise(deposit_rupees)
+                new_paise = (goal['current_amount_paise'] or 0) + deposit_paise
+                new_status = 'completed' if new_paise >= goal['target_amount_paise'] else 'active'
                 conn.execute("""
                     UPDATE savings_goals
-                    SET current_amount_paise = current_amount_paise + ?
+                    SET current_amount_paise = ?, status = ?
                     WHERE id = ? AND profile_id = ?;
-                """, (deposit_paise, goal_id, profile_id))
+                """, (new_paise, new_status, goal_id, profile_id))
+
+                if account_id:
+                    cat = conn.execute("SELECT id FROM categories WHERE name = 'Other' COLLATE NOCASE;").fetchone()
+                    cat_id = cat['id'] if cat else 1
+                    today = datetime.date.today().strftime('%Y-%m-%d')
+                    conn.execute("""
+                        INSERT INTO transactions (profile_id, account_id, date, description, category_id, type, type_tag, amount_paise)
+                        VALUES (?, ?, ?, ?, ?, 'expense', 'savings', ?);
+                    """, (profile_id, int(account_id), today, f"Goal Contribution: {goal['name']}", cat_id, deposit_paise))
             return True
         finally:
             conn.close()
 
-    def withdraw_goal(self, profile_id, goal_id, withdraw_rupees):
+    def withdraw_goal(self, profile_id, goal_id, withdraw_rupees, amount=None, account_id=None):
         """Allows withdrawing or adjusting down savings goal contributions safely."""
+        if amount is not None:
+            withdraw_rupees = amount
         withdraw_rupees = validate_amount(withdraw_rupees, "Withdrawal Amount", min_val=1.0)
         conn = self._get_conn()
         try:
@@ -722,7 +837,7 @@ class FinancialService:
                 withdraw_paise = rupees_to_paise(withdraw_rupees)
                 # Fetch current amount to prevent negative balances
                 current = conn.execute(
-                    "SELECT current_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;",
+                    "SELECT id, name, current_amount_paise, target_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;",
                     (goal_id, profile_id)
                 ).fetchone()
                 if not current:
@@ -732,9 +847,18 @@ class FinancialService:
                 new_paise = current['current_amount_paise'] - withdraw_paise
                 conn.execute("""
                     UPDATE savings_goals
-                    SET current_amount_paise = ?
+                    SET current_amount_paise = ?, status = 'active'
                     WHERE id = ? AND profile_id = ?;
                 """, (new_paise, goal_id, profile_id))
+
+                if account_id:
+                    cat = conn.execute("SELECT id FROM categories WHERE name = 'Other' COLLATE NOCASE;").fetchone()
+                    cat_id = cat['id'] if cat else 1
+                    today = datetime.date.today().strftime('%Y-%m-%d')
+                    conn.execute("""
+                        INSERT INTO transactions (profile_id, account_id, date, description, category_id, type, type_tag, amount_paise)
+                        VALUES (?, ?, ?, ?, ?, 'income', 'savings', ?);
+                    """, (profile_id, int(account_id), today, f"Goal Withdrawal: {current['name']}", cat_id, withdraw_paise))
             return True
         finally:
             conn.close()
@@ -922,20 +1046,40 @@ class FinancialService:
         price_rupees = validate_amount(price_rupees, "Purchase Price", min_val=1.0)
         
         totals = self.get_ledger_totals(profile_id)
-        current_reserve = max(0, totals['balance'])
+        accounts = self.get_accounts(profile_id)
+        liquid_reserve = sum(a['current_balance'] for a in accounts if a['account_type'] != 'credit_card')
+        current_reserve = max(0.0, liquid_reserve) if liquid_reserve > 0 else max(0.0, totals['balance'])
         monthly_expense = totals['expenses']
         
         post_reserve = current_reserve - price_rupees
-        coverage_months = round(max(0.0, post_reserve) / monthly_expense, 1) if monthly_expense > 0 else 0.0
+        if monthly_expense > 0:
+            coverage_months = round(max(0.0, post_reserve) / monthly_expense, 1)
+        else:
+            coverage_months = round(max(0.0, post_reserve) / max(1.0, current_reserve / 6.0), 1)
 
         pct_reduction = round((price_rupees / current_reserve) * 100, 1) if current_reserve > 0 else 100.0
-        avg_monthly_savings = max(1000, totals['savings'])
+        avg_monthly_savings = max(1000.0, totals['savings'])
         recovery_months = round(price_rupees / avg_monthly_savings, 1)
 
-        summary_text = (
-            f"Making this purchase immediately reduces your liquid cash reserves by {pct_reduction}%. "
-            f"It will take approximately {recovery_months} months of average savings to replenish this amount."
-        )
+        if post_reserve < 0:
+            deficit = abs(post_reserve)
+            summary_text = (
+                f"Warning: This purchase exceeds your total liquid cash reserves by {deficit:,.0f} and would leave your accounts in deficit. "
+                f"It will take approximately {recovery_months} months of disciplined savings to safely accumulate this amount."
+            )
+            status = 'critical'
+        elif coverage_months < 3.0:
+            summary_text = (
+                f"Making this purchase reduces your liquid cash reserves by {pct_reduction}%, leaving {coverage_months} months of emergency expense coverage (below the recommended 3 months buffer). "
+                f"It will take approximately {recovery_months} months of average savings to replenish."
+            )
+            status = 'warning'
+        else:
+            summary_text = (
+                f"This purchase is within safe financial bounds! It utilizes {pct_reduction}% of liquid reserves, leaving a strong {coverage_months} months of emergency expense coverage intact. "
+                f"You can fully replenish this expenditure in approximately {recovery_months} months."
+            )
+            status = 'safe'
 
         return {
             'item_name': item_name,
@@ -943,7 +1087,8 @@ class FinancialService:
             'current_reserve': current_reserve,
             'post_reserve': post_reserve,
             'coverage_months': coverage_months,
-            'summary_text': summary_text
+            'summary_text': summary_text,
+            'status': status
         }
 
     def run_what_if_simulation(self, profile_id=1, scenario_type="salary", change_amount_rupees=5000):
@@ -955,7 +1100,7 @@ class FinancialService:
         if scenario_type in ['salary', 'extra_savings']:
             simulated_savings = current_savings + change_amount_rupees
         else: # rent or major recurring cost
-            simulated_savings = max(0, current_savings - change_amount_rupees)
+            simulated_savings = max(0.0, current_savings - change_amount_rupees)
 
         curr_rate = round((current_savings / base_income) * 100, 1) if base_income > 0 else 0.0
         new_income = base_income + (change_amount_rupees if scenario_type == 'salary' else 0)
@@ -964,7 +1109,29 @@ class FinancialService:
         curr_annual = current_savings * 12
         sim_annual = simulated_savings * 12
 
-        accel_months = round(float(change_amount_rupees * 12) / float(simulated_savings), 1) if simulated_savings > 0 else 0.0
+        # Goal completion timeline calculation
+        goals = self.get_goals(profile_id)
+        active_remaining = sum(max(0, g['targetAmount'] - g['currentAmount']) for g in goals if g.get('status') == 'active')
+        benchmark = active_remaining if active_remaining > 0 else max(50000.0, base_income * 2)
+
+        if simulated_savings > current_savings:
+            if current_savings > 0 and simulated_savings > 0:
+                diff = round(max(0.1, (benchmark / current_savings) - (benchmark / simulated_savings)), 1)
+                goal_accel = f"Accelerated by {diff} Months"
+            else:
+                diff = round(max(0.1, benchmark / max(1.0, simulated_savings)), 1)
+                goal_accel = f"Accelerated by {diff} Months"
+            impact = "positive"
+        elif simulated_savings < current_savings:
+            if simulated_savings > 0 and current_savings > 0:
+                diff = round(max(0.1, (benchmark / simulated_savings) - (benchmark / current_savings)), 1)
+                goal_accel = f"Delayed by {diff} Months"
+            else:
+                goal_accel = "Indefinitely delayed (Savings eliminated)"
+            impact = "negative"
+        else:
+            goal_accel = "No change in timeline"
+            impact = "neutral"
 
         return {
             'scenario_type': scenario_type,
@@ -976,5 +1143,6 @@ class FinancialService:
             'sim_annual': sim_annual,
             'curr_rate': f"{curr_rate}%",
             'sim_rate': f"{sim_rate}%",
-            'goal_accel': f"Accelerated by {accel_months} Months" if simulated_savings > current_savings else f"Delayed by {abs(accel_months)} Months"
+            'goal_accel': goal_accel,
+            'impact': impact
         }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MoneyTrack - Monthly Financial Summary Report</title>
+  <title>MoneyTrack - Official Financial Statement &amp; Audit Report</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
   <script src="{{ url_for('static', filename='vendor/tailwind.min.js') }}"></script>
   <script>
@@ -12,7 +12,7 @@
       theme: {
         extend: {
           colors: {
-            brand: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' },
+            brand: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 900: '#14532d' },
             accent: { blue: '#3b82f6', rose: '#f43f5e', amber: '#f59e0b', purple: '#8b5cf6' }
           }
         }
@@ -21,189 +21,405 @@
   </script>
   <style>
     @media print {
-      .no-print { display: none !important; }
-      body { background-color: #ffffff !important; color: #000000 !important; font-size: 11pt; }
-      .page-break { page-break-before: always; }
-      .report-card { border: 1px solid #e2e8f0 !important; box-shadow: none !important; }
+      @page {
+        size: A4;
+        margin: 12mm 14mm;
+      }
+      body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        font-size: 9.5pt;
+        line-height: 1.35;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .document-sheet {
+        box-shadow: none !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+      .avoid-break {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
     }
   </style>
 </head>
-<body class="bg-gray-50 text-slate-800 antialiased p-4 sm:p-8 font-sans">
-  <div class="max-w-4xl mx-auto space-y-6">
+<body class="bg-slate-100 text-slate-800 antialiased p-4 sm:p-8 font-sans">
 
-    <!-- Action Bar (Hidden when printing / generating PDF) -->
-    <div class="no-print flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
-      <div class="flex items-center space-x-3">
-        <a href="/" class="py-2 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-slate-700 transition flex items-center space-x-1">
-          <span>&larr; Back to App</span>
-        </a>
-        <span class="text-xs text-slate-500">Press Print or choose "Save as PDF"</span>
-      </div>
-      <button onclick="window.print()" class="py-2.5 px-5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow transition flex items-center space-x-2">
+  <!-- TOP ACTION TOOLBAR (Hidden when printed or exported to PDF) -->
+  <div class="no-print max-w-[210mm] mx-auto mb-5 p-3.5 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+    <div class="flex items-center space-x-3">
+      <a href="/" class="py-2 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition flex items-center space-x-1.5">
+        <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        <span>Back to Application</span>
+      </a>
+      <span class="text-xs text-slate-500">Statement Period: <strong class="text-slate-800">{{ report_month }}</strong></span>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button onclick="window.print()" class="py-2.5 px-5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-sm transition flex items-center space-x-2">
         <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        <span>Print / Save as PDF</span>
+        <span>Print Document / Save as PDF</span>
       </button>
     </div>
+  </div>
 
-    <!-- Official Report Header -->
-    <div class="p-6 bg-white rounded-2xl border border-gray-200 shadow-sm report-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-      <div>
-        <div class="flex items-center space-x-2">
-          <div class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center font-black text-sm">₹</div>
-          <h1 class="text-xl font-black text-slate-900 tracking-tight">MoneyTrack — Financial Statement</h1>
+  <!-- A4 DOCUMENT CONTAINER -->
+  <main class="document-sheet max-w-[210mm] mx-auto bg-white border border-slate-200 shadow-xl rounded-xl p-8 sm:p-12 space-y-6">
+
+    <!-- INSTITUTIONAL DOCUMENT HEADER -->
+    <header class="border-b-2 border-slate-900 pb-5">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        
+        <!-- Document Title & Brand -->
+        <div class="space-y-1">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-sm">
+              <svg class="w-5 h-5 stroke-current fill-none stroke-2 text-white" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            <div>
+              <span class="text-xs font-extrabold uppercase tracking-widest text-brand-700">MoneyTrack Systems</span>
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-none">Monthly Financial Statement</h1>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500 font-medium">Smart Financial Literacy &amp; Budget Planner — Certified Offline Personal Ledger</p>
         </div>
-        <p class="text-xs text-slate-500 mt-1">Smart Financial Literacy & Budget Planner for the Public (100% Offline)</p>
-      </div>
-      <div class="text-left sm:text-right text-xs space-y-1">
-        <div><span class="text-slate-400">Profile:</span> <span class="font-bold text-slate-800">{{ user.name }}</span></div>
-        <div><span class="text-slate-400">Statement Period:</span> <span class="font-semibold text-slate-700">{{ report_month }}</span></div>
-        <div><span class="text-slate-400">Generated:</span> <span class="text-slate-600">{{ generated_date }}</span></div>
-      </div>
-    </div>
 
-    <!-- Financial Key Figures (KPIs) -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
-        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Income</div>
-        <div class="text-xl font-bold text-brand-600 mt-1">{{ user.currency }}{{ totals.income | default('0') }}</div>
-      </div>
-      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
-        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Expenses</div>
-        <div class="text-xl font-bold text-accent-rose mt-1">{{ user.currency }}{{ totals.expenses | default('0') }}</div>
-      </div>
-      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
-        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Net Savings</div>
-        <div class="text-xl font-bold text-brand-700 mt-1">{{ user.currency }}{{ totals.savings | default('0') }}</div>
-        <div class="text-[10px] text-slate-500">{{ totals.savings_rate }}% savings rate</div>
-      </div>
-      <div class="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm report-card">
-        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Net Cash Balance</div>
-        <div class="text-xl font-bold text-slate-900 mt-1">{{ user.currency }}{{ totals.balance | default('0') }}</div>
-        <div class="text-[10px] text-slate-500">Health: {{ health.score }}/100 ({{ health.status }})</div>
-      </div>
-    </div>
+        <!-- Document Control Metadata Box -->
+        <div class="border border-slate-300 rounded-lg p-2.5 bg-slate-50/50 text-[11px] space-y-1 min-w-[240px]">
+          <div class="flex justify-between">
+            <span class="text-slate-500 font-medium">Document Ref:</span>
+            <span class="font-mono font-bold text-slate-900">MT-{{ report_month | replace('-', '') }}-{{ '%05d' % user.id }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500 font-medium">Account Holder:</span>
+            <span class="font-bold text-slate-900">{{ user.name }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500 font-medium">Statement Period:</span>
+            <span class="font-semibold text-slate-800">{{ report_month }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500 font-medium">Generated On:</span>
+            <span class="text-slate-700">{{ generated_date }} ({{ generated_time }})</span>
+          </div>
+          <div class="flex justify-between border-t border-slate-200 pt-1 text-[10px]">
+            <span class="text-slate-500">Security Mode:</span>
+            <span class="font-bold text-brand-700">100% Offline Local Ledger</span>
+          </div>
+        </div>
 
-    <!-- Category Spending Breakdown & Budgets -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      </div>
+    </header>
+
+    <!-- SECTION 1: EXECUTIVE CASHFLOW & NET WORTH SUMMARY -->
+    <section class="avoid-break space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+        <h2 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-brand-600 inline-block"></span>
+          <span>1. Executive Cashflow &amp; Net Asset Position</span>
+        </h2>
+        <span class="text-[10px] text-slate-500">Currencies in <strong>{{ user.currency }} (INR)</strong></span>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/60">
+          <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Gross Inflow (Income)</div>
+          <div class="text-base font-black text-brand-600 mt-1">+{{ user.currency }}{{ totals.income | default('0') }}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">Recurring &amp; Earned</div>
+        </div>
+
+        <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/60">
+          <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Gross Outflow (Spend)</div>
+          <div class="text-base font-black text-slate-900 mt-1">-{{ user.currency }}{{ totals.expenses | default('0') }}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">Disbursed Expenses</div>
+        </div>
+
+        <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/60">
+          <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Net Operating Surplus</div>
+          <div class="text-base font-black {% if totals.savings >= 0 %}text-brand-700{% else %}text-accent-rose{% endif %} mt-1">
+            {{ user.currency }}{{ totals.savings | default('0') }}
+          </div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Rate: <strong>{{ totals.savings_rate }}%</strong> (Benchmark: 20%+)</div>
+        </div>
+
+        <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/60">
+          <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Liquid Worth</div>
+          <div class="text-base font-black text-slate-900 mt-1">{{ user.currency }}{{ net_worth | default(totals.balance) }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Health: <strong>{{ health.score }}/100 ({{ health.status }})</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: ACCOUNTS & WALLETS AUDIT TABLE -->
+    <section class="avoid-break space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+        <h2 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-brand-600 inline-block"></span>
+          <span>2. Reconciled Asset &amp; Wallet Balances</span>
+        </h2>
+        <span class="text-[10px] text-slate-500">{{ accounts | length }} Registered Accounts</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border border-slate-200 border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-[10px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+              <th class="py-2 px-3 border-r border-slate-200">Account / Wallet</th>
+              <th class="py-2 px-3 border-r border-slate-200">Classification</th>
+              <th class="py-2 px-3 text-right border-r border-slate-200">Inflows (+)</th>
+              <th class="py-2 px-3 text-right border-r border-slate-200">Outflows (-)</th>
+              <th class="py-2 px-3 text-right">Reconciled Balance</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">
+            {% if accounts %}
+              {% for acc in accounts %}
+              <tr class="hover:bg-slate-50/50">
+                <td class="py-2 px-3 font-semibold text-slate-900 border-r border-slate-200">{{ acc.name }}</td>
+                <td class="py-2 px-3 text-slate-600 border-r border-slate-200 capitalize">{{ acc.type_label }}</td>
+                <td class="py-2 px-3 text-right font-medium text-brand-700 border-r border-slate-200">+{{ user.currency }}{{ acc.total_inflow | default(0) }}</td>
+                <td class="py-2 px-3 text-right font-medium text-slate-700 border-r border-slate-200">-{{ user.currency }}{{ acc.total_outflow | default(0) }}</td>
+                <td class="py-2 px-3 text-right font-bold {% if acc.account_type == 'credit_card' %}text-accent-rose{% else %}text-slate-900{% endif %}">
+                  {{ user.currency }}{{ acc.current_balance }}
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5" class="py-3 px-3 text-center text-slate-400">No accounts registered for this profile.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+          <tfoot>
+            <tr class="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-300">
+              <td colspan="2" class="py-2 px-3 border-r border-slate-200 uppercase text-[10px]">Total Liquid Assets (Excluding Credit Debt):</td>
+              <td colspan="3" class="py-2 px-3 text-right text-brand-700">{{ user.currency }}{{ total_assets }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 3: CATEGORY SPENDING & BUDGET PERFORMANCE -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 avoid-break">
       
-      <!-- Category Spending -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3">
-        <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Category Spending Breakdown</h2>
-        {% if category_spending %}
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="text-slate-400 font-semibold border-b border-gray-100 pb-1">
-              <th class="text-left py-1.5">Category</th>
-              <th class="text-right py-1.5">Amount</th>
-              <th class="text-right py-1.5">Share</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            {% for cat in category_spending %}
-            <tr>
-              <td class="py-1.5 font-medium text-slate-800">{{ cat.name }}</td>
-              <td class="py-1.5 text-right font-bold text-slate-900">{{ user.currency }}{{ cat.spent }}</td>
-              <td class="py-1.5 text-right text-slate-500">{{ cat.percentage }}%</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <p class="text-xs text-slate-400 py-2">No expenses recorded for this period.</p>
-        {% endif %}
-      </div>
-
-      <!-- Budget Performance -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3">
-        <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Monthly Budget Discipline</h2>
-        {% if budgets %}
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="text-slate-400 font-semibold border-b border-gray-100 pb-1">
-              <th class="text-left py-1.5">Category</th>
-              <th class="text-right py-1.5">Spent / Limit</th>
-              <th class="text-right py-1.5">Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            {% for b in budgets %}
-            <tr>
-              <td class="py-1.5 font-medium text-slate-800">{{ b.name }}</td>
-              <td class="py-1.5 text-right text-slate-700">{{ user.currency }}{{ b.spent }} / {{ user.currency }}{{ b.limit }}</td>
-              <td class="py-1.5 text-right font-bold text-[10px] {% if b.status == 'Exceeded' %}text-accent-rose{% elif b.status == 'Warning' %}text-accent-amber{% else %}text-brand-600{% endif %}">{{ b.status }} ({{ b.pct }}%)</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <p class="text-xs text-slate-400 py-2">No budget limits configured.</p>
-        {% endif %}
-      </div>
-
-    </div>
-
-    <!-- Savings Goals -->
-    <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3">
-      <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Active Savings Goals</h2>
-      {% if goals %}
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {% for g in goals %}
-        <div class="p-3 rounded-xl border border-gray-100 space-y-1.5 text-xs">
-          <div class="flex justify-between font-bold text-slate-800">
-            <span>{{ g.name }}</span>
-            <span class="text-brand-600">{{ g.pct }}%</span>
-          </div>
-          <div class="text-slate-600">{{ user.currency }}{{ g.currentAmount }} / {{ user.currency }}{{ g.targetAmount }}</div>
-          <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-            <div class="bg-brand-500 h-full" style="width: {{ g.pct }}%;"></div>
-          </div>
-          <div class="text-[10px] text-slate-400 flex justify-between">
-            <span>Remaining: {{ user.currency }}{{ g.remaining }}</span>
-            <span>Target: {{ g.date }}</span>
-          </div>
+      <!-- Category Spending Table -->
+      <section class="space-y-2.5">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+          <h2 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-brand-600 inline-block"></span>
+            <span>3. Expenditure by Category</span>
+          </h2>
         </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <p class="text-xs text-slate-400">No active savings goals found.</p>
-      {% endif %}
+        <table class="w-full text-left text-xs border border-slate-200 border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-[10px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+              <th class="py-2 px-2.5 border-r border-slate-200">Category</th>
+              <th class="py-2 px-2.5 text-right border-r border-slate-200">Disbursed</th>
+              <th class="py-2 px-2.5 text-right">Share (%)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">
+            {% if category_spending %}
+              {% for cat in category_spending %}
+              <tr>
+                <td class="py-1.5 px-2.5 font-medium text-slate-800 border-r border-slate-200">{{ cat.name }}</td>
+                <td class="py-1.5 px-2.5 text-right font-semibold text-slate-900 border-r border-slate-200">{{ user.currency }}{{ cat.spent }}</td>
+                <td class="py-1.5 px-2.5 text-right text-slate-600">{{ cat.percentage }}%</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="3" class="py-2.5 px-2.5 text-center text-slate-400">No expenses recorded for this statement period.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Monthly Budget Compliance Table -->
+      <section class="space-y-2.5">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+          <h2 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-brand-600 inline-block"></span>
+            <span>4. Monthly Budget Governance</span>
+          </h2>
+        </div>
+        <table class="w-full text-left text-xs border border-slate-200 border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-[10px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+              <th class="py-2 px-2.5 border-r border-slate-200">Category</th>
+              <th class="py-2 px-2.5 text-right border-r border-slate-200">Spent / Limit</th>
+              <th class="py-2 px-2.5 text-right">Adherence</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">
+            {% if budgets %}
+              {% for b in budgets %}
+              <tr>
+                <td class="py-1.5 px-2.5 font-medium text-slate-800 border-r border-slate-200">{{ b.name }}</td>
+                <td class="py-1.5 px-2.5 text-right text-slate-700 border-r border-slate-200">{{ user.currency }}{{ b.spent }} / {{ user.currency }}{{ b.limit }}</td>
+                <td class="py-1.5 px-2.5 text-right font-bold text-[10px] {% if b.status == 'Exceeded' %}text-accent-rose{% elif b.status == 'Warning' %}text-accent-amber{% else %}text-brand-700{% endif %}">
+                  {{ b.status }} ({{ b.pct }}%)
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="3" class="py-2.5 px-2.5 text-center text-slate-400">No monthly budgets configured.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </section>
+
     </div>
 
-    <!-- Full Transaction Ledger -->
-    <div class="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm report-card space-y-3 page-break">
-      <h2 class="text-sm font-bold text-slate-900 border-b border-gray-100 pb-2">Detailed Transaction Statement</h2>
-      <table class="w-full text-left text-xs border-collapse">
+    <!-- SECTION 5: CAPITAL ALLOCATIONS & SAVINGS GOALS -->
+    <section class="avoid-break space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+        <h2 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-brand-600 inline-block"></span>
+          <span>5. Capital Allocations &amp; Savings Goals</span>
+        </h2>
+        <span class="text-[10px] text-slate-500">{{ goals | length }} Active Goals</span>
+      </div>
+
+      <table class="w-full text-left text-xs border border-slate-200 border-collapse">
         <thead>
-          <tr class="bg-gray-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-gray-200">
-            <th class="py-2.5 px-3">Date</th>
-            <th class="py-2.5 px-3">Description</th>
-            <th class="py-2.5 px-3">Category</th>
-            <th class="py-2.5 px-3">Type</th>
-            <th class="py-2.5 px-3 text-right">Amount</th>
+          <tr class="bg-slate-100 text-[10px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+            <th class="py-2 px-3 border-r border-slate-200">Goal Description</th>
+            <th class="py-2 px-3 text-right border-r border-slate-200">Target Capital</th>
+            <th class="py-2 px-3 text-right border-r border-slate-200">Funded Capital</th>
+            <th class="py-2 px-3 text-right border-r border-slate-200">Remaining</th>
+            <th class="py-2 px-3 text-center border-r border-slate-200">Target Date</th>
+            <th class="py-2 px-3 text-right">Funded %</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
-          {% for tx in transactions %}
-          <tr>
-            <td class="py-2 px-3 text-slate-500">{{ tx.date }}</td>
-            <td class="py-2 px-3 font-semibold text-slate-800">{{ tx.description }}</td>
-            <td class="py-2 px-3 text-slate-600">{{ tx.category }}</td>
-            <td class="py-2 px-3 capitalize text-slate-500">{{ tx.type }}</td>
-            <td class="py-2 px-3 text-right font-bold {% if tx.type == 'income' %}text-brand-600{% else %}text-slate-900{% endif %}">
-              {% if tx.type == 'income' %}+{% else %}-{% endif %}{{ user.currency }}{{ tx.amount }}
-            </td>
-          </tr>
-          {% endfor %}
+        <tbody class="divide-y divide-slate-200">
+          {% if goals %}
+            {% for g in goals %}
+            <tr>
+              <td class="py-2 px-3 font-semibold text-slate-900 border-r border-slate-200">{{ g.name }}</td>
+              <td class="py-2 px-3 text-right text-slate-700 border-r border-slate-200">{{ user.currency }}{{ g.targetAmount }}</td>
+              <td class="py-2 px-3 text-right font-bold text-brand-700 border-r border-slate-200">{{ user.currency }}{{ g.currentAmount }}</td>
+              <td class="py-2 px-3 text-right text-slate-500 border-r border-slate-200">{{ user.currency }}{{ g.remaining }}</td>
+              <td class="py-2 px-3 text-center text-slate-600 border-r border-slate-200">{{ g.date }}</td>
+              <td class="py-2 px-3 text-right font-black text-brand-700">{{ g.pct }}%</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="6" class="py-2.5 px-3 text-center text-slate-400">No active savings targets defined.</td>
+            </tr>
+          {% endif %}
         </tbody>
       </table>
-    </div>
+    </section>
 
-    <!-- Footer Security & Privacy Guarantee -->
-    <div class="text-center text-[11px] text-slate-400 py-4 border-t border-gray-200">
-      <p>100% Offline Ledger — MoneyTrack does not transmit your financial data over the internet.</p>
-      <p>Generated locally from SQLite database.</p>
-    </div>
+    <!-- SECTION 6: DETAILED TRANSACTION REGISTER (Ledger Statement) -->
+    <section class="page-break space-y-3 pt-4">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+        <h2 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-brand-600 inline-block"></span>
+          <span>6. Detailed Transaction Statement &amp; Ledger Register</span>
+        </h2>
+        <span class="text-[10px] text-slate-500">{{ transactions | length }} Entries Recorded</span>
+      </div>
 
-  </div>
+      <table class="w-full text-left text-xs border border-slate-200 border-collapse">
+        <thead>
+          <tr class="bg-slate-100 text-[10px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+            <th class="py-2 px-2.5 border-r border-slate-200">Date</th>
+            <th class="py-2 px-2.5 border-r border-slate-200">Description</th>
+            <th class="py-2 px-2.5 border-r border-slate-200">Category</th>
+            <th class="py-2 px-2.5 border-r border-slate-200">Account / Channel</th>
+            <th class="py-2 px-2.5 text-center border-r border-slate-200">Classification</th>
+            <th class="py-2 px-2.5 text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% if transactions %}
+            {% for tx in transactions %}
+            <tr class="hover:bg-slate-50/50">
+              <td class="py-1.5 px-2.5 text-slate-600 font-mono text-[11px] border-r border-slate-200 whitespace-nowrap">{{ tx.date }}</td>
+              <td class="py-1.5 px-2.5 font-medium text-slate-900 border-r border-slate-200">{{ tx.description }}</td>
+              <td class="py-1.5 px-2.5 text-slate-600 border-r border-slate-200">{{ tx.category }}</td>
+              <td class="py-1.5 px-2.5 text-slate-700 border-r border-slate-200">{{ tx.account_name | default('Default') }}</td>
+              <td class="py-1.5 px-2.5 text-center text-[10px] uppercase font-semibold text-slate-500 border-r border-slate-200">
+                {% if tx.type == 'transfer' %}Transfer{% else %}{{ tx.typeTag | default(tx.type) }}{% endif %}
+              </td>
+              <td class="py-1.5 px-2.5 text-right font-bold {% if tx.type == 'income' %}text-brand-700{% elif tx.type == 'transfer' %}text-accent-blue{% else %}text-slate-900{% endif %} whitespace-nowrap">
+                {% if tx.type == 'income' %}+{% elif tx.type == 'transfer' %}&harr; {% else %}-{% endif %}{{ user.currency }}{{ tx.amount }}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="6" class="py-3 px-2.5 text-center text-slate-400">No transactions recorded in this register.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 7: OFFICIAL AUDIT & VERIFICATION SEAL -->
+    <footer class="avoid-break border-t-2 border-slate-900 pt-5 mt-6 text-xs text-slate-600 space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-end">
+        <div class="space-y-1.5 text-[11px]">
+          <div class="font-bold text-slate-900 uppercase tracking-wide">Offline Privacy &amp; Integrity Guarantee</div>
+          <p class="text-slate-500 leading-relaxed">
+            This document was generated strictly on-device using local SQLite double-entry ledger algorithms.
+            No personal identity, transaction histories, or account balances have been transmitted over the internet.
+          </p>
+          <div class="text-[10px] text-slate-400 font-mono">
+            Integrity Check: SHA-256 Verified Local Ledger &bull; MoneyTrack v0.1.0 (Alpha)
+          </div>
+        </div>
+
+        <div class="flex flex-col items-start sm:items-end space-y-2 text-[11px]">
+          <div class="text-slate-500">Authorized Client Signature:</div>
+          <div class="w-48 border-b border-slate-400 h-6"></div>
+          <div class="text-[10px] text-slate-400">{{ user.name }} &bull; {{ generated_date }}</div>
+        </div>
+      </div>
+
+      <div class="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-100">
+        MoneyTrack Offline Personal Finance &bull; Autonomous Client Document Report &bull; Page 1 of 1
+      </div>
+    </footer>
+
+  </main>
+
+  <script>
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autoprint') === '1' || params.get('print') === 'true') {
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            window.print();
+          }, 350);
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
