@@ -30,6 +30,43 @@ const MoneyTrackApp = {
       .replace(/'/g, '&#039;');
   },
 
+  getGreeting: function() {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      return "Good morning";
+    } else if (hour >= 12 && hour < 17) {
+      return "Good afternoon";
+    } else if (hour >= 17 && hour < 22) {
+      return "Good evening";
+    } else {
+      return "Good night";
+    }
+  },
+
+  hideStartupLoader: function() {
+    const loader = document.getElementById('startup-loader');
+    if (loader && !loader.classList.contains('hidden')) {
+      loader.classList.add('opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        loader.classList.add('hidden');
+      }, 300);
+    }
+  },
+
+  showInAppLoader: function() {
+    const bar = document.getElementById('in-app-loader');
+    if (bar) bar.classList.remove('hidden');
+  },
+
+  hideInAppLoader: function() {
+    const bar = document.getElementById('in-app-loader');
+    if (bar) {
+      setTimeout(() => {
+        bar.classList.add('hidden');
+      }, 150);
+    }
+  },
+
   state: {
     theme: 'dark',
     user: { name: 'Alex Taylor', currency: '₹' },
@@ -47,8 +84,8 @@ const MoneyTrackApp = {
   },
 
   renderAppVersionInfo: function() {
-    const formattedVersion = APP_CONFIG.version.startsWith('v') 
-      ? APP_CONFIG.version 
+    const formattedVersion = APP_CONFIG.version.startsWith('v')
+      ? APP_CONFIG.version
       : `v${APP_CONFIG.version}`;
 
     document.querySelectorAll('.app-name-display').forEach(el => {
@@ -121,9 +158,11 @@ const MoneyTrackApp = {
             this.showAuthUsersView();
           }
         }
+        this.hideStartupLoader();
       })
       .catch(err => {
         console.error("Auth initialization failed:", err);
+        this.hideStartupLoader();
       });
   },
 
@@ -534,12 +573,17 @@ const MoneyTrackApp = {
 
   // Navigation
   navigateTo: function(viewId) {
+    this.showInAppLoader();
     this.state.currentTab = viewId;
-    document.querySelectorAll('.view-panel').forEach(panel => panel.classList.add('hidden'));
+    document.querySelectorAll('.view-panel').forEach(panel => {
+      panel.classList.add('hidden');
+      panel.classList.remove('animate-fade-in');
+    });
 
     const target = document.getElementById('view-' + viewId);
     if (target) {
       target.classList.remove('hidden');
+      target.classList.add('animate-fade-in');
     }
 
     // Update Nav UI Buttons (Desktop)
@@ -560,6 +604,9 @@ const MoneyTrackApp = {
     }
 
     this.renderAppVersionInfo();
+    setTimeout(() => {
+      this.hideInAppLoader();
+    }, 120);
   },
 
   toggleMobileMenu: function() {
@@ -575,6 +622,7 @@ const MoneyTrackApp = {
 
   // Refresh data from SQLite API
   refreshAllData: function() {
+    this.showInAppLoader();
     Promise.all([
       fetch('/api/dashboard').then(r => r.json()),
       fetch('/api/transactions').then(r => r.json()),
@@ -602,7 +650,11 @@ const MoneyTrackApp = {
       this.renderCalendar();
       this.renderAchievements();
       this.renderAppVersionInfo();
-    }).catch(err => console.error("Error refreshing data:", err));
+      this.hideInAppLoader();
+    }).catch(err => {
+      console.error("Error refreshing data:", err);
+      this.hideInAppLoader();
+    });
   },
 
   renderHeaderAndUser: function() {
@@ -614,7 +666,10 @@ const MoneyTrackApp = {
     if (initialsEl) initialsEl.textContent = (this.state.user.name || 'U').charAt(0).toUpperCase();
 
     const greetingEl = document.getElementById('user-greeting-heading');
-    if (greetingEl) greetingEl.textContent = `Good morning, ${this.state.user.name.split(' ')[0]}`;
+    if (greetingEl) {
+      const firstName = (this.state.user.name || 'User').split(' ')[0];
+      greetingEl.textContent = `${this.getGreeting()}, ${firstName}`;
+    }
 
     const settingName = document.getElementById('setting-user-name');
     if (settingName) settingName.value = this.state.user.name;
@@ -628,7 +683,8 @@ const MoneyTrackApp = {
     document.getElementById('dash-income-val').textContent = totals.income.toLocaleString();
     document.getElementById('dash-expense-val').textContent = totals.expenses.toLocaleString();
     document.getElementById('dash-savings-val').textContent = totals.savings.toLocaleString();
-    document.getElementById('dash-balance-val').textContent = totals.balance.toLocaleString();
+    const netBalance = totals.total_balance !== undefined ? totals.total_balance : totals.balance;
+    document.getElementById('dash-balance-val').textContent = netBalance.toLocaleString();
 
     const savRateEl = document.getElementById('dash-savings-rate');
     if (savRateEl && totals.savings_rate !== undefined) {
@@ -732,26 +788,74 @@ const MoneyTrackApp = {
 
     // Render Alerts
     const alertsContainer = document.getElementById('dashboard-alerts-list');
-    alertsContainer.innerHTML = '';
-    data.alerts.forEach(a => {
-      const isDanger = a.type === 'danger';
-      const isWarning = a.type === 'warning';
-      const bg = isDanger ? 'bg-accent-rose/10 border-accent-rose/20 text-accent-rose' 
-                 : (isWarning ? 'bg-accent-amber/10 border-accent-amber/20 text-accent-amber' : 'bg-brand-50 dark:bg-brand-900/30 border-brand-200 dark:border-brand-900/40 text-brand-600');
-      alertsContainer.innerHTML += `
-        <div class="p-3 rounded-xl border ${bg} text-xs flex items-center space-x-3">
-          <svg class="w-5 h-5 shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span class="text-slate-800 dark:text-slate-200 font-medium">${a.message}</span>
-        </div>
-      `;
-    });
+    if (alertsContainer) {
+      alertsContainer.innerHTML = '';
+      if (!data.alerts || data.alerts.length === 0) {
+        alertsContainer.innerHTML = `
+          <div class="p-3 rounded-xl border border-brand-200 dark:border-brand-900/40 bg-brand-50/50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 text-xs flex items-center space-x-3">
+            <svg class="w-4 h-4 shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span class="font-medium text-slate-700 dark:text-slate-300">All accounts and budgets are currently in healthy standing. No live warnings detected.</span>
+          </div>
+        `;
+      } else {
+        data.alerts.forEach(a => {
+          const isDanger = a.type === 'danger';
+          const isWarning = a.type === 'warning';
+          const bg = isDanger ? 'bg-accent-rose/10 border-accent-rose/20 text-accent-rose'
+                     : (isWarning ? 'bg-accent-amber/10 border-accent-amber/20 text-accent-amber' : 'bg-brand-50 dark:bg-brand-900/30 border-brand-200 dark:border-brand-900/40 text-brand-600');
+          alertsContainer.innerHTML += `
+            <div class="p-3 rounded-xl border ${bg} text-xs flex items-center space-x-3">
+              <svg class="w-5 h-5 shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="text-slate-800 dark:text-slate-200 font-medium">${a.message}</span>
+            </div>
+          `;
+        });
+      }
+    }
+
+    // Render Notifications Modal List
+    const notifContainer = document.getElementById('notifications-modal-list');
+    if (notifContainer) {
+      notifContainer.innerHTML = '';
+      if (!data.alerts || data.alerts.length === 0) {
+        notifContainer.innerHTML = `
+          <div class="p-5 rounded-xl border border-gray-100 dark:border-slate-800 text-center space-y-1.5">
+            <svg class="w-8 h-8 mx-auto stroke-current fill-none stroke-2 text-brand-500" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <p class="font-bold text-xs text-slate-800 dark:text-white">Zero Active Risk Alerts</p>
+            <p class="text-[11px] text-slate-400">Your accounts, budgets, and bills are all on schedule.</p>
+          </div>
+        `;
+      } else {
+        data.alerts.forEach(a => {
+          const isDanger = a.type === 'danger';
+          const isWarning = a.type === 'warning';
+          const cardBorder = isDanger ? 'border-accent-rose/30 bg-accent-rose/5' : (isWarning ? 'border-accent-amber/30 bg-accent-amber/5' : 'border-brand-500/20 bg-brand-50/5');
+          const badgeClass = isDanger ? 'bg-accent-rose text-white' : (isWarning ? 'bg-accent-amber text-white' : 'bg-brand-600 text-white');
+          notifContainer.innerHTML += `
+            <div class="p-3.5 rounded-xl border ${cardBorder} space-y-1.5">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-slate-900 dark:text-white">${a.title || (isDanger ? 'Critical Financial Alert' : (isWarning ? 'Budget Warning' : 'Financial Notice'))}</span>
+                <span class="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${badgeClass}">${a.type}</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${a.message}</p>
+            </div>
+          `;
+        });
+      }
+    }
 
     // Update Notification Bell Count
     const bellBadge = document.getElementById('alert-badge-count');
     if (bellBadge) {
-      const warningCount = data.alerts.filter(a => a.type !== 'success').length;
+      const warningCount = (data.alerts || []).filter(a => a.type !== 'success').length;
       bellBadge.textContent = warningCount;
-      bellBadge.style.display = warningCount > 0 ? 'inline-block' : 'none';
+      if (warningCount > 0) {
+        bellBadge.classList.remove('hidden');
+        bellBadge.style.display = 'flex';
+      } else {
+        bellBadge.classList.add('hidden');
+        bellBadge.style.display = 'none';
+      }
     }
   },
 
@@ -865,6 +969,10 @@ const MoneyTrackApp = {
   populateAccountSelects: function() {
     const filterSelect = document.getElementById('tx-account-filter');
     const formSelect = document.getElementById('tx-form-account');
+    const xferFrom = document.getElementById('transfer-form-from');
+    const xferTo = document.getElementById('transfer-form-to');
+    const goalAccount = document.getElementById('goal-form-account');
+    const goalActionAcc = document.getElementById('goal-action-account');
 
     if (filterSelect) {
       const curFilterVal = filterSelect.value || 'ALL';
@@ -888,6 +996,43 @@ const MoneyTrackApp = {
       } else if (defAcc) {
         formSelect.value = defAcc.id;
       }
+    }
+
+    if (xferFrom && xferTo) {
+      const curFrom = xferFrom.value;
+      const curTo = xferTo.value;
+      xferFrom.innerHTML = '';
+      xferTo.innerHTML = '';
+      this.state.accounts.forEach(acc => {
+        xferFrom.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+        xferTo.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+      });
+      if (curFrom && this.state.accounts.some(a => String(a.id) === String(curFrom))) {
+        xferFrom.value = curFrom;
+      }
+      if (curTo && this.state.accounts.some(a => String(a.id) === String(curTo))) {
+        xferTo.value = curTo;
+      } else if (this.state.accounts.length > 1) {
+        xferTo.selectedIndex = 1;
+      }
+    }
+
+    if (goalAccount) {
+      const curVal = goalAccount.value;
+      goalAccount.innerHTML = '<option value="">Do not deduct from an account</option>';
+      this.state.accounts.forEach(acc => {
+        goalAccount.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+      });
+      if (curVal) goalAccount.value = curVal;
+    }
+
+    if (goalActionAcc) {
+      const curVal = goalActionAcc.value;
+      goalActionAcc.innerHTML = '<option value="">Select Account / Wallet (Optional)</option>';
+      this.state.accounts.forEach(acc => {
+        goalActionAcc.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+      });
+      if (curVal) goalActionAcc.value = curVal;
     }
   },
 
@@ -957,6 +1102,81 @@ const MoneyTrackApp = {
     }
   },
 
+  openTransferModal: function() {
+    if (this.state.accounts.length < 2) {
+      alert('Please create at least 2 accounts or wallets before making a transfer.');
+      return;
+    }
+    this.populateAccountSelects();
+    document.getElementById('transfer-form-amount').value = '';
+    document.getElementById('transfer-form-desc').value = '';
+    document.getElementById('transfer-form-date').value = new Date().toISOString().split('T')[0];
+    const errEl = document.getElementById('transfer-form-error');
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    }
+    this.openModal('transfer-modal');
+  },
+
+  submitTransferForm: function(e) {
+    e.preventDefault();
+    const fromId = parseInt(document.getElementById('transfer-form-from').value);
+    const toId = parseInt(document.getElementById('transfer-form-to').value);
+    const amount = parseFloat(document.getElementById('transfer-form-amount').value);
+    const date = document.getElementById('transfer-form-date').value;
+    const note = document.getElementById('transfer-form-desc').value.trim();
+    const errEl = document.getElementById('transfer-form-error');
+
+    if (!fromId || !toId || fromId === toId) {
+      if (errEl) {
+        errEl.textContent = 'Source and destination accounts must be different.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+      if (errEl) {
+        errEl.textContent = 'Please enter a valid transfer amount greater than 0.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    fetch('/api/accounts/transfer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_account_id: fromId,
+        to_account_id: toId,
+        amount: amount,
+        date: date,
+        note: note
+      })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          this.closeModal('transfer-modal');
+          this.refreshAllData();
+        } else {
+          if (errEl) {
+            errEl.textContent = res.error || 'Failed to complete transfer.';
+            errEl.classList.remove('hidden');
+          } else {
+            alert(res.error || 'Failed to complete transfer.');
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Transfer error:', err);
+        if (errEl) {
+          errEl.textContent = 'An unexpected error occurred.';
+          errEl.classList.remove('hidden');
+        }
+      });
+  },
+
   // ==========================================
   // Transactions Management
   // ==========================================
@@ -997,7 +1217,7 @@ const MoneyTrackApp = {
       if (this.state.transactionsFilter === 'expense' && tx.type !== 'expense') return false;
       if (this.state.transactionsFilter === 'subscriptions' && !(tx.category === 'Bills & Utilities' || tx.description.toLowerCase().includes('pass') || tx.description.toLowerCase().includes('sub'))) return false;
       if (catFilter !== 'ALL' && tx.category !== catFilter) return false;
-      if (accFilter !== 'ALL' && String(tx.account_id) !== String(accFilter)) return false;
+      if (accFilter !== 'ALL' && String(tx.account_id) !== String(accFilter) && String(tx.destination_account_id) !== String(accFilter)) return false;
       if (search && !tx.description.toLowerCase().includes(search) && !tx.category.toLowerCase().includes(search) && !(tx.account_name && tx.account_name.toLowerCase().includes(search))) return false;
       return true;
     });
@@ -1011,10 +1231,12 @@ const MoneyTrackApp = {
 
     filtered.forEach(tx => {
       const isIncome = tx.type === 'income';
-      const amtColor = isIncome ? 'text-brand-600 dark:text-brand-400' : 'text-slate-900 dark:text-white';
-      const sign = isIncome ? '+' : '-';
+      const isTransfer = tx.type === 'transfer';
+      const amtColor = isIncome ? 'text-brand-600 dark:text-brand-400 font-bold' : (isTransfer ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-900 dark:text-white font-bold');
+      const sign = isIncome ? '+' : (isTransfer ? '↔ ' : '-');
       const accName = tx.account_name || 'Unassigned';
       const accIcon = typeIcons[tx.account_type] || '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+      const tagDisplay = isTransfer ? 'Transfer' : (tx.typeTag || tx.type);
 
       tbody.innerHTML += `
         <tr class="hover:bg-gray-50/50 dark:hover:bg-slate-900/40 transition">
@@ -1027,8 +1249,8 @@ const MoneyTrackApp = {
               <span>${accName}</span>
             </span>
           </td>
-          <td class="py-3 px-4"><span class="capitalize text-slate-500">${tx.typeTag || tx.type}</span></td>
-          <td class="py-3 px-4 text-right font-bold ${amtColor}">${sign}${this.state.user.currency}${parseFloat(tx.amount).toLocaleString()}</td>
+          <td class="py-3 px-4"><span class="capitalize text-slate-500">${tagDisplay}</span></td>
+          <td class="py-3 px-4 text-right ${amtColor}">${sign}${this.state.user.currency}${parseFloat(tx.amount).toLocaleString()}</td>
           <td class="py-3 px-4 text-center">
             <button onclick="MoneyTrackApp.promptEditTransaction('${tx.id}')" class="p-1 rounded text-slate-400 hover:text-brand-600 transition mr-1" title="Edit Transaction">
               <svg class="w-4 h-4 stroke-current fill-none stroke-2 inline" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -1048,6 +1270,34 @@ const MoneyTrackApp = {
     document.getElementById('tx-form-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('tx-form-amount').value = '';
     document.getElementById('tx-form-desc').value = '';
+
+    // Toggle necessity container: hide for income, show for expense
+    const necContainer = document.getElementById('tx-form-necessity-container');
+    if (necContainer) {
+      if (type === 'income') {
+        necContainer.classList.add('hidden');
+      } else {
+        necContainer.classList.remove('hidden');
+      }
+    }
+
+    // Populate category dropdown based on type
+    const catSelect = document.getElementById('tx-form-category');
+    if (catSelect) {
+      catSelect.innerHTML = '';
+      if (type === 'income') {
+        const incomeCats = ['Salary', 'Freelance', 'Investments', 'Rental', 'Bonus', 'Gifts', 'Other Income'];
+        incomeCats.forEach(c => {
+          catSelect.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+      } else {
+        const expenseCats = ['Housing', 'Food & Dining', 'Transportation', 'Utilities', 'Healthcare', 'Entertainment', 'Shopping', 'Personal', 'Education', 'Debt & Loans', 'Savings & Investments', 'Other'];
+        expenseCats.forEach(c => {
+          catSelect.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+      }
+    }
+
     this.populateAccountSelects();
     this.openModal('add-tx-modal');
   },
@@ -1059,7 +1309,8 @@ const MoneyTrackApp = {
     const desc = document.getElementById('tx-form-desc').value;
     const category = document.getElementById('tx-form-category').value;
     const date = document.getElementById('tx-form-date').value;
-    const typeTag = document.querySelector('input[name="tx_type_tag"]:checked').value;
+    const typeTagInput = document.querySelector('input[name="tx_type_tag"]:checked');
+    const typeTag = type === 'income' ? 'necessary' : (typeTagInput ? typeTagInput.value : 'necessary');
     const accountEl = document.getElementById('tx-form-account');
     const account_id = accountEl && accountEl.value ? parseInt(accountEl.value) : null;
 
@@ -1170,8 +1421,8 @@ const MoneyTrackApp = {
           </div>
 
           <div class="flex items-center space-x-2 pt-2 border-t border-gray-100 dark:border-slate-800">
-            <button onclick="MoneyTrackApp.depositGoal('${goal.id}')" class="flex-1 py-2 px-2.5 rounded-xl bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 text-xs font-semibold hover:bg-brand-100 transition">+ ${this.state.user.currency}1,000</button>
-            <button onclick="MoneyTrackApp.withdrawGoalPrompt('${goal.id}')" class="py-2 px-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-gray-200 dark:hover:bg-slate-700 transition" title="Withdraw Funds">- Withdraw</button>
+            <button onclick="MoneyTrackApp.openGoalActionModal('${goal.id}', 'deposit')" class="flex-1 py-2 px-2.5 rounded-xl bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 text-xs font-semibold hover:bg-brand-100 transition">+ Deposit</button>
+            <button onclick="MoneyTrackApp.openGoalActionModal('${goal.id}', 'withdraw')" class="py-2 px-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-gray-200 dark:hover:bg-slate-700 transition" title="Withdraw Funds">- Withdraw</button>
             <button onclick="MoneyTrackApp.promptEditGoal('${goal.id}')" class="p-2 rounded-xl text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition" title="Edit Goal">
               <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </button>
@@ -1190,11 +1441,13 @@ const MoneyTrackApp = {
     const targetAmount = parseFloat(document.getElementById('goal-form-target').value);
     const currentAmount = parseFloat(document.getElementById('goal-form-current').value || 0);
     const date = document.getElementById('goal-form-date').value;
+    const accEl = document.getElementById('goal-form-account');
+    const account_id = accEl && accEl.value ? parseInt(accEl.value) : null;
 
     fetch('/api/goals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, targetAmount, currentAmount, date })
+      body: JSON.stringify({ name, targetAmount, currentAmount, date, account_id })
     }).then(r => r.json()).then(res => {
       if (res.success) {
         this.closeModal('add-goal-modal');
@@ -1205,38 +1458,55 @@ const MoneyTrackApp = {
     });
   },
 
-  depositGoal: function(id) {
-    fetch(`/api/goals/${id}/deposit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: 1000 })
-    }).then(r => r.json()).then(res => {
-      if (res.success) {
-        this.refreshAllData();
-      } else {
-        alert(res.error || 'Failed to deposit funds.');
-      }
-    });
+  openGoalActionModal: function(goalId, actionType) {
+    const goal = this.state.goals.find(g => String(g.id) === String(goalId));
+    if (!goal) return;
+
+    this.populateAccountSelects();
+    document.getElementById('goal-action-id').value = goalId;
+    document.getElementById('goal-action-type').value = actionType;
+    document.getElementById('goal-action-amount').value = '';
+
+    const isDeposit = actionType === 'deposit';
+    document.getElementById('goal-action-modal-title').textContent = isDeposit ? `Deposit to ${goal.name}` : `Withdraw from ${goal.name}`;
+    document.getElementById('goal-action-submit-btn').textContent = isDeposit ? 'Confirm Deposit' : 'Confirm Withdrawal';
+
+    const label = document.getElementById('goal-action-account-label');
+    if (label) {
+      label.textContent = isDeposit ? 'Deduct from Account / Wallet (Optional)' : 'Credit to Account / Wallet (Optional)';
+    }
+
+    this.openModal('goal-action-modal');
   },
 
-  withdrawGoalPrompt: function(id) {
-    const amountStr = prompt('Enter amount to withdraw from this goal (' + this.state.user.currency + '):', '500');
-    if (!amountStr) return;
-    const amount = parseFloat(amountStr);
+  submitGoalAction: function(e) {
+    e.preventDefault();
+    const goalId = document.getElementById('goal-action-id').value;
+    const actionType = document.getElementById('goal-action-type').value;
+    const amount = parseFloat(document.getElementById('goal-action-amount').value);
+    const accEl = document.getElementById('goal-action-account');
+    const account_id = accEl && accEl.value ? parseInt(accEl.value) : null;
+
     if (isNaN(amount) || amount <= 0) {
       alert('Please enter a valid positive amount.');
       return;
     }
-    fetch(`/api/goals/${id}/withdraw`, {
+
+    const endpoint = actionType === 'deposit' ? `/api/goals/${goalId}/deposit` : `/api/goals/${goalId}/withdraw`;
+    fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: amount })
+      body: JSON.stringify({ amount: amount, account_id: account_id })
     }).then(r => r.json()).then(res => {
       if (res.success) {
+        this.closeModal('goal-action-modal');
         this.refreshAllData();
       } else {
-        alert(res.error || 'Failed to withdraw funds.');
+        alert(res.error || `Failed to ${actionType} funds.`);
       }
+    }).catch(err => {
+      console.error('Goal action error:', err);
+      alert('An unexpected error occurred.');
     });
   },
 
@@ -1379,6 +1649,28 @@ const MoneyTrackApp = {
       document.getElementById('sim-curr-rate').textContent = res.curr_rate;
       document.getElementById('sim-simulated-rate').textContent = res.sim_rate;
       document.getElementById('sim-goal-accel').textContent = res.goal_accel;
+
+      const card = document.getElementById('sim-simulated-savings-card');
+      const label = document.getElementById('sim-simulated-savings-label');
+      const num = document.getElementById('sim-simulated-savings-num');
+      const accelPill = document.getElementById('sim-goal-accel-pill');
+
+      if (res.impact === 'negative') {
+        if (card) card.className = 'p-5 rounded-2xl bg-accent-rose/10 border border-accent-rose/30 space-y-2';
+        if (label) label.className = 'text-xs font-semibold text-accent-rose';
+        if (num) num.className = 'text-2xl font-bold text-accent-rose';
+        if (accelPill) accelPill.className = 'px-3 py-1 rounded-full text-xs font-bold bg-accent-rose/10 text-accent-rose border border-accent-rose/20 inline-block';
+      } else if (res.impact === 'neutral') {
+        if (card) card.className = 'p-5 rounded-2xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2';
+        if (label) label.className = 'text-xs font-semibold text-slate-500';
+        if (num) num.className = 'text-2xl font-bold text-slate-700 dark:text-slate-300';
+        if (accelPill) accelPill.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 inline-block';
+      } else {
+        if (card) card.className = 'p-5 rounded-2xl bg-brand-50/50 dark:bg-brand-950/20 border border-brand-200 dark:border-brand-900/40 space-y-2';
+        if (label) label.className = 'text-xs font-semibold text-brand-600 dark:text-brand-400';
+        if (num) num.className = 'text-2xl font-bold text-brand-600 dark:text-brand-400';
+        if (accelPill) accelPill.className = 'px-3 py-1 rounded-full text-xs font-bold bg-brand-100 dark:bg-brand-950 text-brand-700 dark:text-brand-400 border border-brand-200 dark:border-brand-800 inline-block';
+      }
     });
   },
 
@@ -1395,6 +1687,28 @@ const MoneyTrackApp = {
       document.getElementById('afford-post-reserve').textContent = res.post_reserve.toLocaleString();
       document.getElementById('afford-months-cov').textContent = `${res.coverage_months} Months`;
       document.getElementById('afford-summary-text').textContent = res.summary_text;
+
+      const card = document.getElementById('afford-result-card');
+      const badge = document.getElementById('afford-cov-badge');
+      if (res.status === 'safe') {
+        if (card) card.className = 'p-4 rounded-xl bg-brand-50/50 dark:bg-brand-950/20 border border-brand-200 dark:border-brand-900/40 space-y-3';
+        if (badge) {
+          badge.className = 'text-xs font-semibold text-brand-600 dark:text-brand-400';
+          badge.textContent = '(Healthy Emergency Cushion)';
+        }
+      } else if (res.status === 'warning') {
+        if (card) card.className = 'p-4 rounded-xl bg-accent-amber/10 border border-accent-amber/30 space-y-3';
+        if (badge) {
+          badge.className = 'text-xs font-semibold text-accent-amber';
+          badge.textContent = '(Tight - Under 3 Months)';
+        }
+      } else {
+        if (card) card.className = 'p-4 rounded-xl bg-accent-rose/10 border border-accent-rose/30 space-y-3';
+        if (badge) {
+          badge.className = 'text-xs font-semibold text-accent-rose';
+          badge.textContent = '(Critical - Insufficient Reserves)';
+        }
+      }
     });
   },
 
@@ -1543,8 +1857,8 @@ const MoneyTrackApp = {
     grid.innerHTML = '';
 
     this.state.achievements.forEach(ach => {
-      const stateStyle = ach.unlocked 
-        ? 'border-brand-500/40 bg-brand-50/40 dark:bg-brand-950/20 text-slate-900 dark:text-white' 
+      const stateStyle = ach.unlocked
+        ? 'border-brand-500/40 bg-brand-50/40 dark:bg-brand-950/20 text-slate-900 dark:text-white'
         : 'border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/30 opacity-50';
 
       grid.innerHTML += `
@@ -1581,45 +1895,92 @@ const MoneyTrackApp = {
   },
 
   exportDataJSON: function() {
-    window.location.href = '/api/settings/export/json';
+    this.showInAppLoader();
+    const pid = this.currentUserProfileId || '';
+    const exportUrl = `/api/settings/export/json?profile_id=${pid}`;
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.setAttribute('download', '');
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      link.remove();
+      this.hideInAppLoader();
+    }, 400);
   },
 
   exportDataCSV: function() {
-    window.location.href = '/api/settings/export/csv';
+    this.showInAppLoader();
+    const pid = this.currentUserProfileId || '';
+    const exportUrl = `/api/settings/export/csv?profile_id=${pid}`;
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.setAttribute('download', '');
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      link.remove();
+      this.hideInAppLoader();
+    }, 400);
   },
 
   openPrintReport: function() {
-    window.open('/report/monthly', '_blank');
+    const pid = this.currentUserProfileId || '';
+    const month = new Date().toISOString().slice(0, 7);
+    const reportUrl = `/report/monthly?profile_id=${pid}&month=${month}&autoprint=1`;
+    const win = window.open(reportUrl, '_blank');
+    if (!win || win.closed || typeof win.closed === 'undefined') {
+      window.location.href = reportUrl;
+    }
   },
 
   importDataJSON: function(event) {
-    const file = event.target.files[0];
+    const file = event.target.files && event.target.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    fetch('/api/settings/import/json', {
-      method: 'POST',
-      body: formData
-    }).then(r => r.json()).then(res => {
-      if (res.success) {
-        alert('Data snapshot successfully restored.');
-        this.refreshAllData();
-      } else {
-        alert(res.error || 'Failed to import backup.');
+    this.showInAppLoader();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const jsonContent = JSON.parse(e.target.result);
+        const pid = this.currentUserProfileId || '';
+        fetch(`/api/settings/import/json?profile_id=${pid}`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Profile-ID': String(pid)
+          },
+          body: JSON.stringify(jsonContent)
+        })
+          .then(r => r.json())
+          .then(res => {
+            this.hideInAppLoader();
+            event.target.value = '';
+            if (res.success) {
+              alert('Data snapshot successfully restored.');
+              this.refreshAllData();
+            } else {
+              alert(res.error || 'Failed to import backup.');
+            }
+          })
+          .catch(err => {
+            this.hideInAppLoader();
+            event.target.value = '';
+            console.error('Import error:', err);
+            alert('Failed to send backup data to server: ' + (err.message || 'Network error'));
+          });
+      } catch (err) {
+        this.hideInAppLoader();
+        event.target.value = '';
+        alert('Invalid JSON file format. Please upload a valid MoneyTrack backup file.');
       }
-    });
-  },
-
-  confirmResetDatabase: function() {
-    fetch('/api/settings/reset', { method: 'POST' })
-      .then(r => r.json())
-      .then(() => {
-        this.closeModal('reset-data-modal');
-        alert('Application database reset to initial demonstration state.');
-        this.refreshAllData();
-      });
+    };
+    reader.onerror = () => {
+      this.hideInAppLoader();
+      event.target.value = '';
+      alert('Error reading backup file.');
+    };
+    reader.readAsText(file);
   },
 
   // Chart.js initialization for offline analytics

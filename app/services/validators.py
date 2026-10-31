@@ -6,16 +6,19 @@ DATE_REGEX = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 def validate_date(date_str):
     """
-    Strictly validates that a date string is in YYYY-MM-DD format
+    Strictly validates that a date string is in YYYY-MM-DD format (or ISO date prefix)
     and represents an actual valid calendar date (including leap years).
     """
-    if not isinstance(date_str, str) or not DATE_REGEX.match(date_str):
+    if not isinstance(date_str, str):
+        raise ValueError("Date must be in YYYY-MM-DD format.")
+    clean_date = date_str.strip().split('T')[0].split(' ')[0]
+    if not DATE_REGEX.match(clean_date):
         raise ValueError("Date must be in YYYY-MM-DD format.")
     try:
-        parts = [int(p) for p in date_str.split('-')]
+        parts = [int(p) for p in clean_date.split('-')]
         # datetime.date validates year, month (1-12), and day (1-31 with leap year check)
         datetime.date(parts[0], parts[1], parts[2])
-        return date_str
+        return clean_date
     except (ValueError, TypeError):
         raise ValueError(f"Invalid calendar date: {date_str}")
 
@@ -66,8 +69,9 @@ def validate_backup_payload(data):
     if not isinstance(data, dict):
         raise ValueError("Invalid backup structure: Root must be a JSON object.")
 
-    if data.get('app') != 'MoneyTrack Offline Financial Planner':
-        raise ValueError("Incompatible backup file: Invalid or missing application identifier.")
+    app_id = str(data.get('app', '')).lower()
+    if 'moneytrack' not in app_id:
+        raise ValueError("Incompatible backup file: Invalid or missing MoneyTrack application identifier.")
 
     # Validate transactions if present
     if 'transactions' in data:

@@ -43,6 +43,8 @@ def init_db(db_path=None):
         tx_cols = [c[1] for c in conn.execute("PRAGMA table_info(transactions);").fetchall()]
         if 'account_id' not in tx_cols:
             conn.execute("ALTER TABLE transactions ADD COLUMN account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;")
+        if 'destination_account_id' not in tx_cols:
+            conn.execute("ALTER TABLE transactions ADD COLUMN destination_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;")
 
         # Check if user_profiles table needs password_hash column migration
         user_cols = [c[1] for c in conn.execute("PRAGMA table_info(user_profiles);").fetchall()]
@@ -52,14 +54,36 @@ def init_db(db_path=None):
         # Ensure any profile without password_hash has default hash
         conn.execute("UPDATE user_profiles SET password_hash = ? WHERE password_hash IS NULL;", (generate_password_hash('password123'),))
 
-        # Check if already seeded
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM user_profiles;")
-        if cursor.fetchone()[0] == 0:
-            seed_initial_data(conn)
-        else:
-            seed_default_accounts(cursor)
+        # Seed shared catalog data (categories, lessons, quizzes, achievements)
+        seed_catalog_data(cursor)
+
+        # Check whether this is a test database or default production database
+        actual_path = os.path.abspath(get_db_path(db_path))
+        default_path = os.path.abspath(DEFAULT_DB_PATH)
+        is_test = (actual_path != default_path) or bool(os.environ.get('MONEYTRACK_TESTING'))
+
+        if is_test:
+            cursor.execute("SELECT COUNT(*) FROM user_profiles;")
+            if cursor.fetchone()[0] == 0:
+                seed_initial_data(conn)
+            else:
+                seed_default_accounts(cursor)
     conn.close()
+
+def seed_catalog_data(cursor):
+    """Seeds categories, lessons, quizzes, and achievements catalog."""
+    # 1. Categories
+    categories = [
+        (1, 'Food & Dining', 'expense', '#3b82f6', 'utensils'),
+        (2, 'Transport', 'expense', '#8b5cf6', 'car'),
+        (3, 'Shopping', 'expense', '#f43f5e', 'shopping-bag'),
+        (4, 'Bills & Utilities', 'expense', '#f59e0b', 'zap'),
+        (5, 'Salary', 'income', '#22c55e', 'wallet'),
+        (6, 'Other', 'both', '#64748b', 'circle'),
+        (7, 'Transfer', 'both', '#6366f1', 'repeat')
+    ]
+    cursor.executemany("INSERT OR IGNORE INTO categories (id, name, type, color, icon) VALUES (?, ?, ?, ?, ?);", categories)
 
 def seed_default_accounts(cursor):
     """Ensures profile 1 has the default multi-account set if missing."""
@@ -74,8 +98,9 @@ def seed_default_accounts(cursor):
     """, accounts)
 
 def seed_initial_data(conn):
-    """Seeds the initial dataset matching the reference design exactly."""
+    """Seeds the initial dataset matching the reference design exactly (used for testing)."""
     cursor = conn.cursor()
+    seed_catalog_data(cursor)
     
     # 1. User Profile
     cursor.execute("""
@@ -85,17 +110,6 @@ def seed_initial_data(conn):
 
     # 1.5. Accounts
     seed_default_accounts(cursor)
-    
-    # 2. Categories
-    categories = [
-        (1, 'Food & Dining', 'expense', '#3b82f6', 'utensils'),
-        (2, 'Transport', 'expense', '#8b5cf6', 'car'),
-        (3, 'Shopping', 'expense', '#f43f5e', 'shopping-bag'),
-        (4, 'Bills & Utilities', 'expense', '#f59e0b', 'zap'),
-        (5, 'Salary', 'income', '#22c55e', 'wallet'),
-        (6, 'Other', 'both', '#64748b', 'circle')
-    ]
-    cursor.executemany("INSERT OR IGNORE INTO categories (id, name, type, color, icon) VALUES (?, ?, ?, ?, ?);", categories)
     
     # 3. Seed Transactions (amounts stored in paise: 1 INR = 100 paise)
     transactions = [

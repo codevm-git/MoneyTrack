@@ -2,7 +2,7 @@
 
 [![Offline Ready](https://img.shields.io/badge/Offline-100%25%20Verified-success)](#3-offline--privacy-guarantees)
 [![Tests Passing](https://img.shields.io/badge/Tests-44%2F44%20Passed-brightgreen)](#6-automated-testing--verification)
-[![Release Version](https://img.shields.io/badge/Version-1.0.0%20(Stable)-blue)](#10-version--release-readiness)
+[![Release Version](https://img.shields.io/badge/Version-0.2.1%20(Beta)-blue)](#10-version--release-readiness)
 
 A self-contained, privacy-first personal finance planner and financial literacy education suite designed for public use. Built using **Python, Flask, SQLite, Jinja2, Tailwind CSS, vanilla JavaScript, and Chart.js**.
 
@@ -215,15 +215,20 @@ The accounting engine was verified against the reference test dataset:
 
 ---
 
-## 9. Known Limitations
+## 9. MoneyTrack – Bug Fixes and Improvements
 
-1. **Browser Local Storage for Theme:** Dark/Light theme mode preference is stored in browser `localStorage`. Resetting browser cookies resets theme preference to default Dark Mode.
-2. **Single Host Multi-User Isolation:** Multi-profile isolation is currently enforced on the same machine via session profiles (`X-Profile-ID` or session). It is intended for household / family members sharing one local offline device, not a multi-tenant remote server.
-3. **Printable Report Engine:** The PDF report relies on the browser's native print engine (`window.print()` &rarr; "Save as PDF"), which preserves 100% offline capability without requiring heavy external binary packages (e.g. `wkhtmltopdf`).
+Fixed several issues in MoneyTrack, including real-time greeting updates, loading screens, financial alerts, and data management.
+- Improved the dashboard greeting to display according to the current time.
+- Added loading screens and lazy loading for smoother page loading.
+- Removed all existing user accounts and dummy data for a fresh start.
+- Fixed Financial Alerts & Warnings and notification functionality.
+- Fixed JSON/CSV export, JSON import, and PDF report generation.
+- Improved PDF printing to generate a proper document-style financial report instead of a webpage screenshot.
+- Removed the Reset All Local Application Data button and its related logic to prevent bugs and data loss.
 
 ---
 
 ## 10. Version & Release Status
 
-- **Current Version:** `v0.1.9`
+- **Current Version:** `v0.2.1`
 - **Release Status:** **beta**

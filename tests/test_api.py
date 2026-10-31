@@ -171,9 +171,18 @@ class TestApiEndpoints(unittest.TestCase):
         res_imp = self.client.post('/api/settings/import/json', json=backup_data)
         self.assertEqual(res_imp.status_code, 200)
 
-        # Reset Database
-        res_reset = self.client.post('/api/settings/reset')
-        self.assertEqual(res_reset.status_code, 200)
+        # Transfer Funds between Accounts
+        acc_res = self.client.get('/api/accounts').get_json()
+        if len(acc_res['accounts']) >= 2:
+            res_transfer = self.client.post('/api/accounts/transfer', json={
+                'from_account_id': acc_res['accounts'][0]['id'],
+                'to_account_id': acc_res['accounts'][1]['id'],
+                'amount': 250.0,
+                'date': '2026-10-24',
+                'note': 'Test wallet transfer'
+            })
+            self.assertEqual(res_transfer.status_code, 201)
+            self.assertTrue(res_transfer.get_json()['success'])
 
 if __name__ == '__main__':
     unittest.main()

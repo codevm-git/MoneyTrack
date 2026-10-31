@@ -4,6 +4,7 @@ from app.services.calculator_service import calculate_emi, calculate_compound_in
 from app.services.learning_service import LearningService
 from app.services.backup_service import BackupService
 import json
+from datetime import datetime, timedelta
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 fin_service = FinancialService()
@@ -11,11 +12,22 @@ learn_service = LearningService()
 backup_service = BackupService()
 
 def get_current_profile_id():
-    """Retrieves current user profile ID from session or header with fallback to default 1."""
+    """Retrieves current user profile ID from query param, header, or session with fallback to first active profile."""
+    query_val = request.args.get('profile_id')
+    if query_val and query_val.isdigit():
+        return int(query_val)
     header_val = request.headers.get('X-Profile-ID')
     if header_val and header_val.isdigit():
         return int(header_val)
-    return session.get('profile_id', 1)
+    if 'profile_id' in session:
+        return session['profile_id']
+    try:
+        profiles = fin_service.list_user_profiles()
+        if profiles:
+            return profiles[0]['id']
+    except Exception:
+        pass
+    return 1
 
 # --- Authentication & Username Multi-User System ---
 @api_bp.route('/auth/users', methods=['GET'])
@@ -129,24 +141,54 @@ def get_dashboard():
     category_spending = fin_service.get_category_spending(profile_id)
     budgets = fin_service.get_budget_overview(profile_id)
     health = fin_service.calculate_health_score(profile_id)
+    accounts = fin_service.get_accounts(profile_id)
+    curr_symbol = user.get('currency', '₹') if user else '₹'
     
     # Generate live diagnostic alerts
     alerts = []
+    # 1. Budget Alerts
     for b in budgets:
         if b['pct'] > 100:
             alerts.append({
                 'type': 'danger',
+                'title': f"Budget Exceeded: {b['name']}",
                 'message': f"{b['name']} budget exceeded by {b['pct'] - 100}% this month."
             })
         elif b['pct'] >= 85:
             alerts.append({
                 'type': 'warning',
+                'title': f"Budget Warning: {b['name']}",
                 'message': f"{b['name']} budget has reached {b['pct']}% of monthly limit."
             })
+
+    # 2. Upcoming Scheduled Calendar Bills (within next 7 days)
+    cal_events = fin_service.get_calendar_events(profile_id)
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    seven_days_later = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+    for evt in cal_events:
+        if evt.get('status') == 'scheduled' and evt.get('type') == 'expense':
+            due = evt.get('dueDate') or evt.get('due_date')
+            if due and today_str <= due <= seven_days_later:
+                alerts.append({
+                    'type': 'warning',
+                    'title': f"Upcoming Bill: {evt.get('title')}",
+                    'message': f"{evt.get('title')} ({curr_symbol}{evt.get('amount')}) due on {due}."
+                })
+
+    # 3. Negative Account Balance Warnings (< 0)
+    for acc in accounts:
+        if acc.get('account_type') != 'credit_card' and acc.get('current_balance', 0) < 0:
+            alerts.append({
+                'type': 'danger',
+                'title': f"Negative Balance: {acc.get('name')}",
+                'message': f"{acc.get('name')} is in negative balance ({curr_symbol}{acc.get('current_balance')})."
+            })
+
     if not alerts:
         alerts.append({
             'type': 'success',
-            'message': 'All category spending is within safe budget limits.'
+            'title': 'Healthy Financial State',
+            'message': 'All accounts and category spending are within safe limits.'
         })
 
     return jsonify({
@@ -156,7 +198,7 @@ def get_dashboard():
         'budgets': budgets,
         'health': health,
         'alerts': alerts,
-        'accounts': fin_service.get_accounts(profile_id)
+        'accounts': accounts
     })
 
 # --- Accounts & Account Types ---
@@ -226,6 +268,23 @@ def delete_account(acc_id):
     try:
         fin_service.delete_account(profile_id, acc_id)
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@api_bp.route('/accounts/transfer', methods=['POST'])
+def transfer_account_funds():
+    profile_id = get_current_profile_id()
+    data = request.get_json() or {}
+    from_acc_id = data.get('from_account_id') or data.get('fromAccountId')
+    to_acc_id = data.get('to_account_id') or data.get('toAccountId')
+    amount = data.get('amount')
+    date = data.get('date')
+    description = data.get('description')
+    try:
+        tx_id = fin_service.transfer_funds(profile_id, from_acc_id, to_acc_id, amount, date, description)
+        return jsonify({'success': True, 'transaction_id': tx_id}), 201
+    except ValueError as ve:
+        return jsonify({'error': str(ve)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
@@ -358,8 +417,10 @@ def create_goal():
         target = data.get('targetAmount')
         current = data.get('currentAmount', 0)
         date = data.get('date')
+        raw_acc_id = data.get('account_id') or data.get('accountId')
+        account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
 
-        goal_id = fin_service.add_goal(profile_id, name, target, current, date)
+        goal_id = fin_service.add_goal(profile_id, name, target, current, date, account_id=account_id)
         return jsonify({'success': True, 'id': goal_id}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -369,8 +430,10 @@ def deposit_goal(goal_id):
     profile_id = get_current_profile_id()
     data = request.get_json() or {}
     amount = data.get('amount', 1000)
+    raw_acc_id = data.get('account_id') or data.get('accountId')
+    account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
     try:
-        fin_service.deposit_goal(profile_id, goal_id, amount)
+        fin_service.deposit_goal(profile_id, goal_id, amount, account_id=account_id)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -380,8 +443,10 @@ def withdraw_goal(goal_id):
     profile_id = get_current_profile_id()
     data = request.get_json() or {}
     amount = data.get('amount', 500)
+    raw_acc_id = data.get('account_id') or data.get('accountId')
+    account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
     try:
-        fin_service.withdraw_goal(profile_id, goal_id, amount)
+        fin_service.withdraw_goal(profile_id, goal_id, amount, account_id=account_id)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -550,40 +615,55 @@ def save_profile():
 @api_bp.route('/settings/export/json', methods=['GET'])
 def export_json():
     profile_id = get_current_profile_id()
+    user = fin_service.get_user_profile(profile_id)
+    uname = (user['name'] if user and user.get('name') else f"user_{profile_id}").strip().replace(' ', '_').lower()
+    date_str = datetime.now().strftime('%Y-%m-%d')
     data = backup_service.export_json_backup(profile_id)
+    filename = f"moneytrack_backup_{uname}_{date_str}.json"
     return Response(
         json.dumps(data, indent=2),
         mimetype="application/json",
-        headers={"Content-Disposition": "attachment;filename=moneytrack_backup.json"}
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+        }
     )
 
 @api_bp.route('/settings/export/csv', methods=['GET'])
 def export_csv():
     profile_id = get_current_profile_id()
+    user = fin_service.get_user_profile(profile_id)
+    uname = (user['name'] if user and user.get('name') else f"user_{profile_id}").strip().replace(' ', '_').lower()
+    date_str = datetime.now().strftime('%Y-%m-%d')
     csv_str = backup_service.export_csv(profile_id)
+    filename = f"moneytrack_statement_{uname}_{date_str}.csv"
     return Response(
         csv_str,
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=moneytrack_transactions.csv"}
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+        }
     )
 
 @api_bp.route('/settings/import/json', methods=['POST'])
 def import_json():
     profile_id = get_current_profile_id()
     try:
+        data = None
         if 'file' in request.files:
             file_obj = request.files['file']
             file_content = file_obj.read().decode('utf-8', errors='replace')
             data = json.loads(file_content)
         else:
-            data = request.get_json()
+            data = request.get_json(silent=True)
+            if data is None:
+                raw_body = request.get_data(as_text=True)
+                if raw_body:
+                    data = json.loads(raw_body)
+        if not data:
+            return jsonify({'error': 'No JSON payload provided'}), 400
         backup_service.import_json_backup(data, profile_id)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
-@api_bp.route('/settings/reset', methods=['POST'])
-def reset_database():
-    profile_id = get_current_profile_id()
-    backup_service.reset_to_seed(profile_id)
-    return jsonify({'success': True})

@@ -111,11 +111,18 @@ class BackupService:
                             if not acc_check:
                                 mapped_acc_id = None
 
+                        raw_dest_id = t.get('destination_account_id')
+                        mapped_dest_id = account_id_map.get(raw_dest_id, raw_dest_id)
+                        if mapped_dest_id is not None:
+                            dest_check = conn.execute("SELECT id FROM accounts WHERE id = ? AND profile_id = ?;", (mapped_dest_id, profile_id)).fetchone()
+                            if not dest_check:
+                                mapped_dest_id = None
+
                         conn.execute("""
-                            INSERT INTO transactions (profile_id, date, description, category_id, type, type_tag, amount_paise, account_id)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                            INSERT INTO transactions (profile_id, date, description, category_id, type, type_tag, amount_paise, account_id, destination_account_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """, (profile_id, t['date'], sanitize_text(t['description'], "Tx Description", 1, 250),
-                              cat_id, t['type'], t.get('typeTag', t.get('type_tag', 'necessary')), int(amount_paise), mapped_acc_id))
+                              cat_id, t['type'], t.get('typeTag', t.get('type_tag', 'necessary')), int(amount_paise), mapped_acc_id, mapped_dest_id))
 
                 # 5. Restore goals
                 if 'goals' in data and isinstance(data['goals'], list):
@@ -152,10 +159,16 @@ class BackupService:
         conn = self._get_conn()
         try:
             sql = """
-                SELECT t.date, t.description, c.name as category, COALESCE(a.name, 'Unassigned') as account, t.type, t.type_tag as necessity, t.amount_paise
+                SELECT t.date, t.description, COALESCE(c.name, 'General') as category,
+                       CASE 
+                           WHEN t.type = 'transfer' AND dest.name IS NOT NULL THEN COALESCE(a.name, 'Account') || ' -> ' || dest.name
+                           ELSE COALESCE(a.name, 'Unassigned')
+                       END as account,
+                       t.type, t.type_tag as necessity, t.amount_paise
                 FROM transactions t
-                JOIN categories c ON t.category_id = c.id
+                LEFT JOIN categories c ON t.category_id = c.id
                 LEFT JOIN accounts a ON t.account_id = a.id
+                LEFT JOIN accounts dest ON t.destination_account_id = dest.id
                 WHERE t.profile_id = ?
                 ORDER BY t.date DESC;
             """
@@ -166,22 +179,5 @@ class BackupService:
             for r in rows:
                 writer.writerow([r['date'], r['description'], r['category'], r['account'], r['type'], r['necessity'], paise_to_rupees(r['amount_paise'])])
             return output.getvalue()
-        finally:
-            conn.close()
-
-    def reset_to_seed(self, profile_id=1):
-        conn = self._get_conn()
-        try:
-            with conn:
-                conn.execute("DELETE FROM transactions WHERE profile_id = ?;", (profile_id,))
-                conn.execute("DELETE FROM accounts WHERE profile_id = ?;", (profile_id,))
-                conn.execute("DELETE FROM budgets WHERE profile_id = ?;", (profile_id,))
-                conn.execute("DELETE FROM savings_goals WHERE profile_id = ?;", (profile_id,))
-                conn.execute("DELETE FROM calendar_events WHERE profile_id = ?;", (profile_id,))
-                conn.execute("DELETE FROM user_quiz_results WHERE profile_id = ?;", (profile_id,))
-                conn.execute("DELETE FROM user_achievements WHERE profile_id = ?;", (profile_id,))
-                conn.execute("DELETE FROM user_profiles WHERE id = ?;", (profile_id,))
-                seed_initial_data(conn)
-            return True
         finally:
             conn.close()
