@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.3-beta] - 2026-11-08
+
+### Added
+- **Dedicated Savings Wallets for Savings Goals:**
+  - Automatic creation of dedicated savings wallets in `accounts` (`account_type = 'wallet'`, `savings_goal_id`, `color = '#10b981'`) upon Savings Goal creation.
+  - Linked goal and wallet tracking ensuring target progress is dynamically computed from actual wallet balances without duplicate counting or cache drift.
+  - Visible dedicated savings goal wallets in the Accounts & Wallets section featuring distinctive `🎯 Goal:` badges and quick deposit/withdraw action triggers.
+- **Flexible User-Controlled Deposits & Withdrawals:**
+  - Replaced static initial deposit logic with flexible deposit (`Add Money`) and withdrawal controls.
+  - Real-time balance validations ensuring deposits do not exceed available source balance and withdrawals do not exceed accumulated savings.
+  - Atomic database transactions maintaining strict consistency during all money movements.
+- **Non-Destructive Goal Deletion & Safe Fund Return:**
+  - Deleting a savings goal verifies remaining savings balance and returns funds safely to the original funding account or user-selected destination account.
+  - Prevents accidental loss of money; deletes the dedicated savings wallet only after funds are preserved.
+- **Full Ledger & Transaction Integration:**
+  - All savings goal deposits and withdrawals are recorded as `transfer` transactions (`type = 'transfer'`, `type_tag = 'savings'`).
+  - Distinguishable display in transaction history (`Source Account → Dedicated Savings Wallet` on deposit, and `Dedicated Savings Wallet → Destination Account` on withdrawal).
+  - Complete isolation from regular income and expenses in financial summaries.
+- **Custom Application GUI Modals (Zero Browser-Native Popups):**
+  - Implemented custom application-styled modals: `#add-goal-money-modal`, `#withdraw-goal-money-modal`, `#edit-goal-modal`, and `#delete-goal-modal`.
+  - Replaced all browser-native `prompt()`, `alert()`, and `confirm()` dialogs across the Savings Goals interface.
+  - Integrated with the customized toast notification stack (`showToast`).
+- **Dedicated Automated Test Suite:**
+  - Created `tests/test_savings_goals_wallets.py` with 8 comprehensive unit tests covering all wallet creation, deposit, withdrawal, deletion fund return, isolation, and REST API flows (totaling 73/73 tests passing).
+
+---
+
 ## [0.8.2-beta] - 2026-11-08
 
 ### Added

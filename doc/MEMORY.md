@@ -5,8 +5,8 @@
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/MEMORY.md`  
-**Current Release Version:** `v0.8.2-beta` (Stable Target: `v1.0.0`)  
-**Test Suite Status:** 65/65 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.3-beta` (Stable Target: `v1.0.0`)  
+**Test Suite Status:** 73/73 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -108,7 +108,7 @@ flowchart LR
 ├── templates/
 │   ├── index.html               # Authoritative single-page application UI matching reference
 │   └── report.html              # Printer-ready & PDF exportable monthly statement
-├── tests/                       # Automated test suite (65 tests, 100% pass)
+├── tests/                       # Automated test suite (73 tests, 100% pass)
 │   ├── test_accounts.py
 │   ├── test_api.py
 │   ├── test_calculators.py
@@ -116,6 +116,7 @@ flowchart LR
 │   ├── test_e2e_workflows.py
 │   ├── test_financial_service.py
 │   ├── test_money_and_transactions.py
+│   ├── test_savings_goals_wallets.py
 │   ├── test_security_and_integrity.py
 │   └── test_username_auth.py
 ├── vendor/                      # Bundled offline Python package distribution (Flask, Jinja2, etc.)
@@ -176,10 +177,10 @@ flowchart LR
 ---
 
 ## 11. Current Development Stage & Milestones
-- **Current Version:** `v0.8.2-beta`
+- **Current Version:** `v0.8.3-beta`
 - **Core Architecture:** 100% Implemented (Flask backend, SQLite schema, Jinja2 views, REST APIs).
-- **Test Matrix:** 65/65 automated tests passing across 9 test suites.
-- **Phase 7 Milestone Completed:** Account Transfers across all account types, atomic balance debit/credits, opening balance verification, custom transaction editing GUI modal, zero-account transaction guards, and bug fixes (`update_transaction` keyword args).
+- **Test Matrix:** 73/73 automated tests passing across 10 test suites.
+- **Phase 8 Milestone Completed:** Savings Goals Dedicated Wallets, user-controlled Add/Withdraw money, non-destructive fund return on goal deletion, full ledger transfer integration, custom GUI modals without native popups, and real-time wallet tracking in Accounts & Wallets.
 - **Offline Packaging:** Vendored offline dependencies verified.
 
 ---

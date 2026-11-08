@@ -151,12 +151,27 @@ class FinancialService:
     def get_accounts(self, profile_id=1):
         conn = self._get_conn()
         try:
-            rows = conn.execute("""
-                SELECT id, profile_id, name, account_type, initial_balance_paise, color, icon, is_default, created_at
-                FROM accounts
-                WHERE profile_id = ?
-                ORDER BY is_default DESC, id ASC;
-            """, (profile_id,)).fetchall()
+            # Check if savings_goal_id column exists
+            acc_cols = [c[1] for c in conn.execute("PRAGMA table_info(accounts);").fetchall()]
+            has_goal_col = 'savings_goal_id' in acc_cols
+
+            if has_goal_col:
+                rows = conn.execute("""
+                    SELECT a.id, a.profile_id, a.name, a.account_type, a.initial_balance_paise, a.color, a.icon, a.is_default, a.savings_goal_id, a.created_at,
+                           g.name as savings_goal_name
+                    FROM accounts a
+                    LEFT JOIN savings_goals g ON a.savings_goal_id = g.id
+                    WHERE a.profile_id = ?
+                    ORDER BY a.is_default DESC, a.id ASC;
+                """, (profile_id,)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT id, profile_id, name, account_type, initial_balance_paise, color, icon, is_default, created_at,
+                           NULL as savings_goal_id, NULL as savings_goal_name
+                    FROM accounts
+                    WHERE profile_id = ?
+                    ORDER BY is_default DESC, id ASC;
+                """, (profile_id,)).fetchall()
 
             accounts = []
             for r in rows:
@@ -208,16 +223,22 @@ class FinancialService:
                 acc_savings_paise = max(0, total_inflows_paise - total_outflows_paise)
                 acc_savings_rate = round((acc_savings_paise / total_inflows_paise) * 100, 1) if total_inflows_paise > 0 else 0.0
 
+                is_savings_wallet = bool(r['savings_goal_id'])
+                savings_goal_name = r['savings_goal_name'] if is_savings_wallet else None
+
                 accounts.append({
                     'id': str(acc_id),
                     'name': r['name'],
                     'account_type': acc_type,
-                    'type_label': meta['label'],
+                    'type_label': 'Savings Wallet' if is_savings_wallet else meta['label'],
                     'badge_class': meta['badge_class'],
                     'color': r['color'],
                     'icon': r['icon'],
                     'is_default': bool(r['is_default']),
                     'is_primary': bool(r['is_default']),
+                    'savings_goal_id': r['savings_goal_id'],
+                    'savings_goal_name': savings_goal_name,
+                    'is_savings_wallet': is_savings_wallet,
                     'initial_balance': paise_to_rupees(initial_paise),
                     'current_balance': paise_to_rupees(current_paise),
                     'current_balance_paise': current_paise,
@@ -909,70 +930,210 @@ class FinancialService:
             conn.close()
 
     # --- Savings Goals Operations (Add, Deposit, Withdraw, Edit, Delete) ---
+    def _get_account_balance_in_conn(self, conn, profile_id, account_id):
+        """Calculates current balance in paise of an account within an open connection."""
+        acc = conn.execute("SELECT id, account_type, initial_balance_paise FROM accounts WHERE id = ? AND profile_id = ?;", (account_id, profile_id)).fetchone()
+        if not acc:
+            return 0
+        initial_paise = acc['initial_balance_paise'] or 0
+        inflow = conn.execute("SELECT SUM(amount_paise) FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'income';", (profile_id, account_id)).fetchone()[0] or 0
+        outflow = conn.execute("SELECT SUM(amount_paise) FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'expense';", (profile_id, account_id)).fetchone()[0] or 0
+        tr_out = conn.execute("SELECT SUM(amount_paise) FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'transfer';", (profile_id, account_id)).fetchone()[0] or 0
+        tr_in = conn.execute("SELECT SUM(amount_paise) FROM transactions WHERE profile_id = ? AND destination_account_id = ? AND type = 'transfer';", (profile_id, account_id)).fetchone()[0] or 0
+
+        if acc['account_type'] == 'credit_card':
+            return initial_paise + (outflow - inflow) - tr_in + tr_out
+        return initial_paise + inflow - outflow + tr_in - tr_out
+
+    def _get_or_create_goal_wallet(self, conn, profile_id, goal_id, goal_name, initial_balance_paise=None):
+        """Ensures a dedicated savings wallet exists in accounts for this goal."""
+        goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+        has_wallet_col = 'wallet_account_id' in goal_cols
+
+        goal = conn.execute("SELECT wallet_account_id, current_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;", (goal_id, profile_id)).fetchone()
+        if goal and has_wallet_col and goal['wallet_account_id']:
+            acc = conn.execute("SELECT id FROM accounts WHERE id = ? AND profile_id = ?;", (goal['wallet_account_id'], profile_id)).fetchone()
+            if acc:
+                return acc['id']
+
+        # Check if an account already has this savings_goal_id
+        acc_cols = [c[1] for c in conn.execute("PRAGMA table_info(accounts);").fetchall()]
+        if 'savings_goal_id' in acc_cols:
+            existing_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND savings_goal_id = ?;", (profile_id, goal_id)).fetchone()
+            if existing_acc:
+                if has_wallet_col:
+                    conn.execute("UPDATE savings_goals SET wallet_account_id = ? WHERE id = ?;", (existing_acc['id'], goal_id))
+                return existing_acc['id']
+
+        # Default initial balance to current_amount_paise of the goal if not specified
+        if initial_balance_paise is None and goal:
+            initial_balance_paise = goal['current_amount_paise'] or 0
+        else:
+            initial_balance_paise = initial_balance_paise or 0
+
+        if 'savings_goal_id' in acc_cols:
+            cur = conn.execute("""
+                INSERT INTO accounts (profile_id, name, account_type, initial_balance_paise, color, icon, is_default, savings_goal_id)
+                VALUES (?, ?, 'wallet', ?, '#10b981', 'target', 0, ?);
+            """, (profile_id, f"Savings Wallet – {goal_name}", initial_balance_paise, goal_id))
+            wallet_id = cur.lastrowid
+        else:
+            cur = conn.execute("""
+                INSERT INTO accounts (profile_id, name, account_type, initial_balance_paise, color, icon, is_default)
+                VALUES (?, ?, 'wallet', ?, '#10b981', 'target', 0);
+            """, (profile_id, f"Savings Wallet – {goal_name}", initial_balance_paise))
+            wallet_id = cur.lastrowid
+
+        if has_wallet_col:
+            conn.execute("UPDATE savings_goals SET wallet_account_id = ? WHERE id = ?;", (wallet_id, goal_id))
+        return wallet_id
+
     def get_goals(self, profile_id=1):
         conn = self._get_conn()
         try:
-            rows = conn.execute("""
-                SELECT id, name, target_amount_paise, current_amount_paise, target_date, status
-                FROM savings_goals
-                WHERE profile_id = ? AND status != 'archived'
-                ORDER BY id ASC;
-            """, (profile_id,)).fetchall()
+            goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+            has_extended_cols = 'wallet_account_id' in goal_cols and 'funding_account_id' in goal_cols and 'description' in goal_cols
+
+            if has_extended_cols:
+                rows = conn.execute("""
+                    SELECT g.id, g.name, g.target_amount_paise, g.current_amount_paise, g.target_date, g.status,
+                           g.description, g.funding_account_id, g.wallet_account_id,
+                           fa.name as funding_account_name,
+                           wa.id as actual_wallet_id, wa.initial_balance_paise as wallet_initial_paise
+                    FROM savings_goals g
+                    LEFT JOIN accounts fa ON g.funding_account_id = fa.id
+                    LEFT JOIN accounts wa ON g.wallet_account_id = wa.id
+                    WHERE g.profile_id = ? AND g.status != 'archived'
+                    ORDER BY g.id ASC;
+                """, (profile_id,)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT id, name, target_amount_paise, current_amount_paise, target_date, status,
+                           NULL as description, NULL as funding_account_id, NULL as wallet_account_id,
+                           NULL as funding_account_name, NULL as actual_wallet_id, NULL as wallet_initial_paise
+                    FROM savings_goals
+                    WHERE profile_id = ? AND status != 'archived'
+                    ORDER BY id ASC;
+                """, (profile_id,)).fetchall()
 
             goals = []
             for r in rows:
-                target = paise_to_rupees(r['target_amount_paise'])
-                current = paise_to_rupees(r['current_amount_paise'])
-                pct = min(100, round((r['current_amount_paise'] / r['target_amount_paise']) * 100)) if r['target_amount_paise'] > 0 else 0
+                target_paise = r['target_amount_paise'] or 0
+                target = paise_to_rupees(target_paise)
+                
+                # If an actual dedicated wallet exists, derive current balance from the wallet
+                if r['actual_wallet_id']:
+                    current_paise = self._get_account_balance_in_conn(conn, profile_id, r['actual_wallet_id'])
+                    if current_paise != r['current_amount_paise']:
+                        conn.execute("UPDATE savings_goals SET current_amount_paise = ? WHERE id = ?;", (current_paise, r['id']))
+                else:
+                    current_paise = r['current_amount_paise'] or 0
+
+                current = paise_to_rupees(current_paise)
+                pct = min(100, round((current_paise / target_paise) * 100)) if target_paise > 0 else 0
                 remaining = max(0, target - current)
+                status = 'completed' if current_paise >= target_paise and target_paise > 0 else ('active' if r['status'] != 'archived' else 'archived')
 
                 goals.append({
                     'id': str(r['id']),
                     'name': r['name'],
                     'targetAmount': target,
                     'currentAmount': current,
-                    'target_amount_paise': r['target_amount_paise'],
-                    'current_amount_paise': r['current_amount_paise'],
+                    'target_amount_paise': target_paise,
+                    'current_amount_paise': current_paise,
                     'pct': pct,
                     'remaining': remaining,
                     'date': r['target_date'],
-                    'status': r['status']
+                    'status': status,
+                    'description': r['description'] or '',
+                    'funding_account_id': r['funding_account_id'],
+                    'funding_account_name': r['funding_account_name'] or '',
+                    'wallet_account_id': r['actual_wallet_id'] or r['wallet_account_id']
                 })
             return goals
         finally:
             conn.close()
 
-    def add_goal(self, profile_id, name, target_rupees, current_rupees=0, target_date=None, target_amount=None, current_amount=None, account_id=None):
+    def add_goal(self, profile_id, name, target_rupees, current_rupees=0, target_date=None, target_amount=None, current_amount=None, account_id=None, description=None, funding_account_id=None):
         if target_rupees is None and target_amount is not None:
             target_rupees = target_amount
         if current_rupees is None and current_amount is not None:
             current_rupees = current_amount
+        if account_id is None and funding_account_id is not None:
+            account_id = funding_account_id
         current_rupees = current_rupees or 0
         name = sanitize_text(name, "Goal Name", 1, 100)
         target_rupees = validate_amount(target_rupees, "Target Amount", min_val=1.0)
         current_rupees = validate_amount(current_rupees, "Initial Deposit", min_val=0.0)
         target_date = validate_date(target_date) if target_date else datetime.date.today().strftime('%Y-%m-%d')
+        if description:
+            description = sanitize_text(description, "Description", 0, 255)
 
         conn = self._get_conn()
         try:
             with conn:
                 target_paise = rupees_to_paise(target_rupees)
                 current_paise = rupees_to_paise(current_rupees)
-                cur = conn.execute("""
-                    INSERT INTO savings_goals (profile_id, name, target_amount_paise, current_amount_paise, target_date, status)
-                    VALUES (?, ?, ?, ?, ?, 'active');
-                """, (profile_id, name, target_paise, current_paise, target_date))
+
+                goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+                has_extended = 'wallet_account_id' in goal_cols and 'funding_account_id' in goal_cols and 'description' in goal_cols
+
+                if has_extended:
+                    cur = conn.execute("""
+                        INSERT INTO savings_goals (profile_id, name, target_amount_paise, current_amount_paise, target_date, description, funding_account_id, status)
+                        VALUES (?, ?, ?, 0, ?, ?, ?, 'active');
+                    """, (profile_id, name, target_paise, target_date, description, account_id))
+                else:
+                    cur = conn.execute("""
+                        INSERT INTO savings_goals (profile_id, name, target_amount_paise, current_amount_paise, target_date, status)
+                        VALUES (?, ?, ?, 0, ?, 'active');
+                    """, (profile_id, name, target_paise, target_date))
                 new_goal_id = cur.lastrowid
 
-                # If initial deposit came from an account, record transaction
-                if current_rupees > 0 and account_id:
-                    cat = conn.execute("SELECT id FROM categories WHERE name = 'Other' COLLATE NOCASE;").fetchone()
-                    cat_id = cat['id'] if cat else 1
-                    today = datetime.date.today().strftime('%Y-%m-%d')
-                    conn.execute("""
-                        INSERT INTO transactions (profile_id, account_id, date, description, category_id, type, type_tag, amount_paise)
-                        VALUES (?, ?, ?, ?, ?, 'expense', 'savings', ?);
-                    """, (profile_id, int(account_id), today, f"Initial Deposit: {name}", cat_id, current_paise))
+                # Create dedicated savings wallet
+                wallet_id = self._get_or_create_goal_wallet(conn, profile_id, new_goal_id, name, initial_balance_paise=0)
+
+                # Handle initial funding deposit if provided
+                if current_rupees > 0:
+                    if account_id:
+                        source_avail = self._get_account_balance_in_conn(conn, profile_id, int(account_id))
+                        if current_paise > source_avail:
+                            raise ValueError(f"Insufficient funds in source account. Available balance is ₹{paise_to_rupees(source_avail):,.2f}.")
+
+                        cat = conn.execute("SELECT id FROM categories WHERE name = 'Transfer' COLLATE NOCASE;").fetchone()
+                        cat_id = cat['id'] if cat else 7
+                        today = datetime.date.today().strftime('%Y-%m-%d')
+                        conn.execute("""
+                            INSERT INTO transactions (profile_id, account_id, destination_account_id, date, description, category_id, type, type_tag, amount_paise)
+                            VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'savings', ?);
+                        """, (profile_id, int(account_id), wallet_id, today, f"Initial Deposit: {name}", cat_id, current_paise))
+
+                        status = 'completed' if current_paise >= target_paise else 'active'
+                        conn.execute("UPDATE savings_goals SET current_amount_paise = ?, status = ? WHERE id = ?;", (current_paise, status, new_goal_id))
+                    else:
+                        # Fallback: check if user has a default account with balance
+                        def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND is_default = 1 AND id != ?;", (profile_id, wallet_id)).fetchone()
+                        if not def_acc:
+                            def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND id != ? AND account_type != 'credit_card' LIMIT 1;", (profile_id, wallet_id)).fetchone()
+
+                        if def_acc:
+                            source_avail = self._get_account_balance_in_conn(conn, profile_id, def_acc['id'])
+                            if source_avail >= current_paise:
+                                cat = conn.execute("SELECT id FROM categories WHERE name = 'Transfer' COLLATE NOCASE;").fetchone()
+                                cat_id = cat['id'] if cat else 7
+                                today = datetime.date.today().strftime('%Y-%m-%d')
+                                conn.execute("""
+                                    INSERT INTO transactions (profile_id, account_id, destination_account_id, date, description, category_id, type, type_tag, amount_paise)
+                                    VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'savings', ?);
+                                """, (profile_id, def_acc['id'], wallet_id, today, f"Initial Deposit: {name}", cat_id, current_paise))
+                                status = 'completed' if current_paise >= target_paise else 'active'
+                                conn.execute("UPDATE savings_goals SET current_amount_paise = ?, funding_account_id = ?, status = ? WHERE id = ?;", (current_paise, def_acc['id'], status, new_goal_id))
+                            else:
+                                conn.execute("UPDATE accounts SET initial_balance_paise = ? WHERE id = ?;", (current_paise, wallet_id))
+                                conn.execute("UPDATE savings_goals SET current_amount_paise = ? WHERE id = ?;", (current_paise, new_goal_id))
+                        else:
+                            conn.execute("UPDATE accounts SET initial_balance_paise = ? WHERE id = ?;", (current_paise, wallet_id))
+                            conn.execute("UPDATE savings_goals SET current_amount_paise = ? WHERE id = ?;", (current_paise, new_goal_id))
 
                 # Unlock goal setter badge
                 conn.execute("""
@@ -983,99 +1144,300 @@ class FinancialService:
         finally:
             conn.close()
 
-    def deposit_goal(self, profile_id, goal_id, deposit_rupees=1000, amount=None, account_id=None):
+    def deposit_goal(self, profile_id, goal_id, deposit_rupees=1000, amount=None, account_id=None, note=None, description=None):
         if amount is not None:
             deposit_rupees = amount
-        deposit_rupees = validate_amount(deposit_rupees, "Deposit Amount", min_val=1.0)
+        deposit_rupees = validate_amount(deposit_rupees, "Deposit Amount", min_val=0.01)
+        deposit_paise = rupees_to_paise(deposit_rupees)
+        desc_text = note or description
+
         conn = self._get_conn()
         try:
             with conn:
-                goal = conn.execute("SELECT id, name, target_amount_paise, current_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;", (goal_id, profile_id)).fetchone()
+                goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+                has_extended = 'wallet_account_id' in goal_cols and 'funding_account_id' in goal_cols
+
+                if has_extended:
+                    goal = conn.execute("""
+                        SELECT id, name, target_amount_paise, current_amount_paise, funding_account_id, wallet_account_id
+                        FROM savings_goals
+                        WHERE id = ? AND profile_id = ?;
+                    """, (goal_id, profile_id)).fetchone()
+                else:
+                    goal = conn.execute("""
+                        SELECT id, name, target_amount_paise, current_amount_paise, NULL as funding_account_id, NULL as wallet_account_id
+                        FROM savings_goals
+                        WHERE id = ? AND profile_id = ?;
+                    """, (goal_id, profile_id)).fetchone()
+
                 if not goal:
                     raise ValueError("Goal not found.")
 
-                deposit_paise = rupees_to_paise(deposit_rupees)
-                new_paise = (goal['current_amount_paise'] or 0) + deposit_paise
+                wallet_id = self._get_or_create_goal_wallet(conn, profile_id, goal_id, goal['name'])
+
+                # Determine source account
+                source_id = None
+                if account_id:
+                    source_id = int(account_id)
+                elif goal['funding_account_id']:
+                    chk = conn.execute("SELECT id FROM accounts WHERE id = ? AND profile_id = ?;", (goal['funding_account_id'], profile_id)).fetchone()
+                    if chk:
+                        source_id = chk['id']
+
+                if not source_id:
+                    def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND is_default = 1 AND id != ?;", (profile_id, wallet_id)).fetchone()
+                    if not def_acc:
+                        def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND id != ? AND account_type != 'credit_card' LIMIT 1;", (profile_id, wallet_id)).fetchone()
+                    if def_acc:
+                        source_id = def_acc['id']
+
+                if not source_id:
+                    raise ValueError("Please select a source account or wallet to deposit from.")
+
+                if source_id == wallet_id:
+                    raise ValueError("Source account and goal savings wallet cannot be the same.")
+
+                source_avail = self._get_account_balance_in_conn(conn, profile_id, source_id)
+                if deposit_paise > source_avail:
+                    raise ValueError(f"Insufficient funds in selected account. Available balance is ₹{paise_to_rupees(source_avail):,.2f}.")
+
+                cat = conn.execute("SELECT id FROM categories WHERE name = 'Transfer' COLLATE NOCASE;").fetchone()
+                cat_id = cat['id'] if cat else 7
+                today = datetime.date.today().strftime('%Y-%m-%d')
+                tx_desc = desc_text if desc_text else f"Goal Deposit: {goal['name']}"
+
+                conn.execute("""
+                    INSERT INTO transactions (profile_id, account_id, destination_account_id, date, description, category_id, type, type_tag, amount_paise)
+                    VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'savings', ?);
+                """, (profile_id, source_id, wallet_id, today, tx_desc, cat_id, deposit_paise))
+
+                # Recalculate goal balance from wallet
+                new_paise = self._get_account_balance_in_conn(conn, profile_id, wallet_id)
                 new_status = 'completed' if new_paise >= goal['target_amount_paise'] else 'active'
+                
+                if has_extended:
+                    conn.execute("""
+                        UPDATE savings_goals
+                        SET current_amount_paise = ?, status = ?, funding_account_id = COALESCE(funding_account_id, ?)
+                        WHERE id = ? AND profile_id = ?;
+                    """, (new_paise, new_status, source_id, goal_id, profile_id))
+                else:
+                    conn.execute("""
+                        UPDATE savings_goals
+                        SET current_amount_paise = ?, status = ?
+                        WHERE id = ? AND profile_id = ?;
+                    """, (new_paise, new_status, goal_id, profile_id))
+            return True
+        finally:
+            conn.close()
+
+    def withdraw_goal(self, profile_id, goal_id, withdraw_rupees, amount=None, account_id=None, note=None, description=None):
+        """Allows withdrawing savings goal contributions safely into an account."""
+        if amount is not None:
+            withdraw_rupees = amount
+        withdraw_rupees = validate_amount(withdraw_rupees, "Withdrawal Amount", min_val=0.01)
+        withdraw_paise = rupees_to_paise(withdraw_rupees)
+        desc_text = note or description
+
+        conn = self._get_conn()
+        try:
+            with conn:
+                goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+                has_extended = 'wallet_account_id' in goal_cols and 'funding_account_id' in goal_cols
+
+                if has_extended:
+                    goal = conn.execute("""
+                        SELECT id, name, target_amount_paise, current_amount_paise, funding_account_id, wallet_account_id
+                        FROM savings_goals
+                        WHERE id = ? AND profile_id = ?;
+                    """, (goal_id, profile_id)).fetchone()
+                else:
+                    goal = conn.execute("""
+                        SELECT id, name, target_amount_paise, current_amount_paise, NULL as funding_account_id, NULL as wallet_account_id
+                        FROM savings_goals
+                        WHERE id = ? AND profile_id = ?;
+                    """, (goal_id, profile_id)).fetchone()
+
+                if not goal:
+                    raise ValueError("Goal not found.")
+
+                wallet_id = self._get_or_create_goal_wallet(conn, profile_id, goal_id, goal['name'], initial_balance_paise=goal['current_amount_paise'] or 0)
+
+                wallet_balance = self._get_account_balance_in_conn(conn, profile_id, wallet_id)
+                current_savings_paise = max(wallet_balance, goal['current_amount_paise'] or 0)
+                if withdraw_paise > current_savings_paise:
+                    raise ValueError(f"Cannot withdraw ₹{withdraw_rupees:,.2f}: exceeds available savings balance of ₹{paise_to_rupees(current_savings_paise):,.2f}.")
+
+                # Determine destination account
+                dest_id = None
+                if account_id:
+                    dest_id = int(account_id)
+                elif goal['funding_account_id']:
+                    chk = conn.execute("SELECT id FROM accounts WHERE id = ? AND profile_id = ?;", (goal['funding_account_id'], profile_id)).fetchone()
+                    if chk:
+                        dest_id = chk['id']
+
+                if not dest_id:
+                    def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND is_default = 1 AND id != ?;", (profile_id, wallet_id)).fetchone()
+                    if not def_acc:
+                        def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND id != ? AND account_type != 'credit_card' LIMIT 1;", (profile_id, wallet_id)).fetchone()
+                    if def_acc:
+                        dest_id = def_acc['id']
+
+                if not dest_id:
+                    raise ValueError("Please select a destination account or wallet to withdraw into.")
+
+                if dest_id == wallet_id:
+                    raise ValueError("Destination account and goal savings wallet cannot be the same.")
+
+                cat = conn.execute("SELECT id FROM categories WHERE name = 'Transfer' COLLATE NOCASE;").fetchone()
+                cat_id = cat['id'] if cat else 7
+                today = datetime.date.today().strftime('%Y-%m-%d')
+                tx_desc = desc_text if desc_text else f"Goal Withdrawal: {goal['name']}"
+
+                conn.execute("""
+                    INSERT INTO transactions (profile_id, account_id, destination_account_id, date, description, category_id, type, type_tag, amount_paise)
+                    VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'savings', ?);
+                """, (profile_id, wallet_id, dest_id, today, tx_desc, cat_id, withdraw_paise))
+
+                # Recalculate goal balance from wallet
+                new_paise = self._get_account_balance_in_conn(conn, profile_id, wallet_id)
+                new_status = 'completed' if new_paise >= goal['target_amount_paise'] and goal['target_amount_paise'] > 0 else 'active'
                 conn.execute("""
                     UPDATE savings_goals
                     SET current_amount_paise = ?, status = ?
                     WHERE id = ? AND profile_id = ?;
                 """, (new_paise, new_status, goal_id, profile_id))
-
-                if account_id:
-                    cat = conn.execute("SELECT id FROM categories WHERE name = 'Other' COLLATE NOCASE;").fetchone()
-                    cat_id = cat['id'] if cat else 1
-                    today = datetime.date.today().strftime('%Y-%m-%d')
-                    conn.execute("""
-                        INSERT INTO transactions (profile_id, account_id, date, description, category_id, type, type_tag, amount_paise)
-                        VALUES (?, ?, ?, ?, ?, 'expense', 'savings', ?);
-                    """, (profile_id, int(account_id), today, f"Goal Contribution: {goal['name']}", cat_id, deposit_paise))
             return True
         finally:
             conn.close()
 
-    def withdraw_goal(self, profile_id, goal_id, withdraw_rupees, amount=None, account_id=None):
-        """Allows withdrawing or adjusting down savings goal contributions safely."""
-        if amount is not None:
-            withdraw_rupees = amount
-        withdraw_rupees = validate_amount(withdraw_rupees, "Withdrawal Amount", min_val=1.0)
-        conn = self._get_conn()
-        try:
-            with conn:
-                withdraw_paise = rupees_to_paise(withdraw_rupees)
-                # Fetch current amount to prevent negative balances
-                current = conn.execute(
-                    "SELECT id, name, current_amount_paise, target_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;",
-                    (goal_id, profile_id)
-                ).fetchone()
-                if not current:
-                    raise ValueError("Goal not found.")
-                if withdraw_paise > current['current_amount_paise']:
-                    raise ValueError(f"Cannot withdraw {withdraw_rupees}: exceeds available balance of {paise_to_rupees(current['current_amount_paise'])}.")
-                new_paise = current['current_amount_paise'] - withdraw_paise
-                conn.execute("""
-                    UPDATE savings_goals
-                    SET current_amount_paise = ?, status = 'active'
-                    WHERE id = ? AND profile_id = ?;
-                """, (new_paise, goal_id, profile_id))
-
-                if account_id:
-                    cat = conn.execute("SELECT id FROM categories WHERE name = 'Other' COLLATE NOCASE;").fetchone()
-                    cat_id = cat['id'] if cat else 1
-                    today = datetime.date.today().strftime('%Y-%m-%d')
-                    conn.execute("""
-                        INSERT INTO transactions (profile_id, account_id, date, description, category_id, type, type_tag, amount_paise)
-                        VALUES (?, ?, ?, ?, ?, 'income', 'savings', ?);
-                    """, (profile_id, int(account_id), today, f"Goal Withdrawal: {current['name']}", cat_id, withdraw_paise))
-            return True
-        finally:
-            conn.close()
-
-    def edit_goal(self, profile_id, goal_id, name, target_rupees=None, target_date=None, target_amount_rupees=None):
+    def edit_goal(self, profile_id, goal_id, name, target_rupees=None, target_date=None, target_amount_rupees=None, description=None):
         if target_rupees is None and target_amount_rupees is not None:
             target_rupees = target_amount_rupees
         name = sanitize_text(name, "Goal Name", 1, 100)
         target_rupees = validate_amount(target_rupees, "Target Amount", min_val=1.0)
-        target_date = validate_date(target_date)
+        target_date = validate_date(target_date) if target_date else None
+        if description:
+            description = sanitize_text(description, "Description", 0, 255)
 
         conn = self._get_conn()
         try:
             with conn:
                 target_paise = rupees_to_paise(target_rupees)
-                conn.execute("""
-                    UPDATE savings_goals
-                    SET name = ?, target_amount_paise = ?, target_date = ?
-                    WHERE id = ? AND profile_id = ?;
-                """, (name, target_paise, target_date, goal_id, profile_id))
+                goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+                has_extended = 'wallet_account_id' in goal_cols and 'description' in goal_cols
+
+                if has_extended:
+                    goal = conn.execute("SELECT wallet_account_id, current_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;", (goal_id, profile_id)).fetchone()
+                else:
+                    goal = conn.execute("SELECT NULL as wallet_account_id, current_amount_paise FROM savings_goals WHERE id = ? AND profile_id = ?;", (goal_id, profile_id)).fetchone()
+
+                if not goal:
+                    raise ValueError("Goal not found.")
+
+                status = 'completed' if (goal['current_amount_paise'] or 0) >= target_paise else 'active'
+                if has_extended:
+                    if target_date:
+                        conn.execute("""
+                            UPDATE savings_goals
+                            SET name = ?, target_amount_paise = ?, target_date = ?, description = COALESCE(?, description), status = ?
+                            WHERE id = ? AND profile_id = ?;
+                        """, (name, target_paise, target_date, description, status, goal_id, profile_id))
+                    else:
+                        conn.execute("""
+                            UPDATE savings_goals
+                            SET name = ?, target_amount_paise = ?, description = COALESCE(?, description), status = ?
+                            WHERE id = ? AND profile_id = ?;
+                        """, (name, target_paise, description, status, goal_id, profile_id))
+                else:
+                    if target_date:
+                        conn.execute("""
+                            UPDATE savings_goals
+                            SET name = ?, target_amount_paise = ?, target_date = ?, status = ?
+                            WHERE id = ? AND profile_id = ?;
+                        """, (name, target_paise, target_date, status, goal_id, profile_id))
+                    else:
+                        conn.execute("""
+                            UPDATE savings_goals
+                            SET name = ?, target_amount_paise = ?, status = ?
+                            WHERE id = ? AND profile_id = ?;
+                        """, (name, target_paise, status, goal_id, profile_id))
+
+                if goal['wallet_account_id']:
+                    conn.execute("UPDATE accounts SET name = ? WHERE id = ? AND profile_id = ?;", (f"Savings Wallet – {name}", goal['wallet_account_id'], profile_id))
             return True
         finally:
             conn.close()
 
-    def delete_goal(self, profile_id, goal_id):
+    def delete_goal(self, profile_id, goal_id, destination_account_id=None):
         conn = self._get_conn()
         try:
             with conn:
+                goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+                has_extended = 'wallet_account_id' in goal_cols and 'funding_account_id' in goal_cols
+
+                if has_extended:
+                    goal = conn.execute("""
+                        SELECT id, name, current_amount_paise, funding_account_id, wallet_account_id
+                        FROM savings_goals
+                        WHERE id = ? AND profile_id = ?;
+                    """, (goal_id, profile_id)).fetchone()
+                else:
+                    goal = conn.execute("""
+                        SELECT id, name, current_amount_paise, NULL as funding_account_id, NULL as wallet_account_id
+                        FROM savings_goals
+                        WHERE id = ? AND profile_id = ?;
+                    """, (goal_id, profile_id)).fetchone()
+
+                if not goal:
+                    return False
+
+                wallet_id = goal['wallet_account_id']
+                rem_balance_paise = 0
+                if wallet_id:
+                    rem_balance_paise = self._get_account_balance_in_conn(conn, profile_id, wallet_id)
+                else:
+                    rem_balance_paise = goal['current_amount_paise'] or 0
+
+                if rem_balance_paise > 0:
+                    dest_id = None
+                    if destination_account_id:
+                        dest_id = int(destination_account_id)
+                    elif goal['funding_account_id']:
+                        chk = conn.execute("SELECT id FROM accounts WHERE id = ? AND profile_id = ?;", (goal['funding_account_id'], profile_id)).fetchone()
+                        if chk:
+                            dest_id = chk['id']
+
+                    if not dest_id:
+                        def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND is_default = 1 AND id != ?;", (profile_id, wallet_id or 0)).fetchone()
+                        if not def_acc:
+                            def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND id != ? AND account_type != 'credit_card' LIMIT 1;", (profile_id, wallet_id or 0)).fetchone()
+                        if def_acc:
+                            dest_id = def_acc['id']
+
+                    if not dest_id:
+                        raise ValueError("Cannot delete savings goal with remaining funds: please select an account to return the money to.")
+
+                    cat = conn.execute("SELECT id FROM categories WHERE name = 'Transfer' COLLATE NOCASE;").fetchone()
+                    cat_id = cat['id'] if cat else 7
+                    today = datetime.date.today().strftime('%Y-%m-%d')
+
+                    if wallet_id:
+                        conn.execute("""
+                            INSERT INTO transactions (profile_id, account_id, destination_account_id, date, description, category_id, type, type_tag, amount_paise)
+                            VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'savings', ?);
+                        """, (profile_id, wallet_id, dest_id, today, f"Refund on Goal Deletion: {goal['name']}", cat_id, rem_balance_paise))
+                    else:
+                        conn.execute("""
+                            UPDATE accounts
+                            SET initial_balance_paise = initial_balance_paise + ?
+                            WHERE id = ? AND profile_id = ?;
+                        """, (rem_balance_paise, dest_id, profile_id))
+
+                if wallet_id:
+                    conn.execute("DELETE FROM accounts WHERE id = ? AND profile_id = ?;", (wallet_id, profile_id))
+
                 conn.execute("DELETE FROM savings_goals WHERE id = ? AND profile_id = ?;", (goal_id, profile_id))
             return True
         finally:
