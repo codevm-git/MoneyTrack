@@ -5,7 +5,7 @@
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/MEMORY.md`  
-**Current Release Version:** `v0.2.2-beta` (Stable Target: `v1.0.0`)  
+**Current Release Version:** `v0.8.1-beta` (Stable Target: `v1.0.0`)  
 **Test Suite Status:** 57/57 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
 
 ---
@@ -175,7 +175,7 @@ flowchart LR
 ---
 
 ## 11. Current Development Stage & Milestones
-- **Current Version:** `v0.2.2-beta` (Dashboard Account-Wise Analytics, Category Budget Limits Manager, Dynamic Insights, Real-Time Alerts, Live System Diagnostics & Background Tab Notifications).
+- **Current Version:** `v0.8.1-beta` Resolving the version numbering using git tag 
 - **Core Architecture:** 100% Implemented (Flask backend, SQLite schema, Jinja2 views, REST APIs).
 - **Test Matrix:** 57/57 automated tests passing across 8 test suites.
 - **Offline Packaging:** Vendored offline dependencies verified.

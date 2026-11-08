@@ -6,7 +6,7 @@
 **Application Name:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/ARCHITECTURE.md`  
-**Current Release Version:** `v0.2.2-beta` (Git Commit: `c37a834`, Target: `v1.0.0 Stable`)  
+**Current Release Version:** `v0.8.1-beta` 
 
 ---
 

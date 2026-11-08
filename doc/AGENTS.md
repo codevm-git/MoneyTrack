@@ -6,6 +6,10 @@ The **actual source code** on disk (`app/`, `templates/`, `static/`, `data/`, `t
 
 ---
 
+## 0. Check git tag for numbering the version 
+
+- Dont create any version number and always check for git tags and tell where is version numbers mention in *.md files
+
 ## 1. Read Before Editing
 - Read root [`AGENTS.md`](file:///home/prajwal/College%20Work/PROJECT/Smart%20Financial%20Literacy%20and%20Budget%20Planner%20for%20Public/AGENTS.md) first.
 - Read [`doc/MEMORY.md`](file:///home/prajwal/College%20Work/PROJECT/Smart%20Financial%20Literacy%20and%20Budget%20Planner%20for%20Public/doc/MEMORY.md), [`doc/RULES.md`](file:///home/prajwal/College%20Work/PROJECT/Smart%20Financial%20Literacy%20and%20Budget%20Planner%20for%20Public/doc/RULES.md), and [`doc/PROJECT_AUDIT.md`](file:///home/prajwal/College%20Work/PROJECT/Smart%20Financial%20Literacy%20and%20Budget%20Planner%20for%20Public/doc/PROJECT_AUDIT.md) before modifying code.

@@ -22,6 +22,7 @@
   - `cc8cd9e`: `v0.1.8-beta username system and with version display for the application` (2026-10-19)
   - `e20c373`: `v0.1.9 cleared data for fresh useage` (2026-10-19)
   - `c37a834`: `v0.2.1-beta fixed general and settings related issues` (2026-10-31)
+  - `not-define` : `v0.8.1-beta Resolving with version numbering issue using git tag` (2026-11-08)
 
 ### 1.2 Inspection Summary & Ground Truth
 A rigorous physical inspection and verification of the workspace was conducted across all directories, source files, and database entities. The objective was to verify the presence, integrity, and operational status of all technologies, codebases, tests, and assets.

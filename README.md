@@ -2,7 +2,7 @@
 
 [![Offline Ready](https://img.shields.io/badge/Offline-100%25%20Verified-success)](#3-offline--privacy-guarantees)
 [![Tests Passing](https://img.shields.io/badge/Tests-44%2F44%20Passed-brightgreen)](#6-automated-testing--verification)
-[![Release Version](https://img.shields.io/badge/Version-0.2.1%20(Beta)-blue)](#10-version--release-readiness)
+[![Release Version](https://img.shields.io/badge/Version-0.8.1%20(Beta)-blue)](#10-version--release-readiness)
 
 A self-contained, privacy-first personal finance planner and financial literacy education suite designed for public use. Built using **Python, Flask, SQLite, Jinja2, Tailwind CSS, vanilla JavaScript, and Chart.js**.
 
@@ -230,5 +230,5 @@ Fixed several issues in MoneyTrack, including real-time greeting updates, loadin
 
 ## 10. Version & Release Status
 
-- **Current Version:** `v0.2.1`
+- **Current Version:** `v0.8.1`
 - **Release Status:** **beta**
