@@ -136,69 +136,78 @@ def delete_profile(profile_id):
 @api_bp.route('/dashboard', methods=['GET'])
 def get_dashboard():
     profile_id = get_current_profile_id()
+    account_param = request.args.get('account_id')
+    account_id = None
+    if account_param and account_param != 'ALL' and account_param.lower() != 'null' and account_param != '':
+        try:
+            account_id = int(account_param)
+        except ValueError:
+            account_id = None
+
     user = fin_service.get_user_profile(profile_id)
-    totals = fin_service.get_ledger_totals(profile_id)
-    category_spending = fin_service.get_category_spending(profile_id)
-    budgets = fin_service.get_budget_overview(profile_id)
-    health = fin_service.calculate_health_score(profile_id)
     accounts = fin_service.get_accounts(profile_id)
-    curr_symbol = user.get('currency', '₹') if user else '₹'
     
-    # Generate live diagnostic alerts
-    alerts = []
-    # 1. Budget Alerts
-    for b in budgets:
-        if b['pct'] > 100:
-            alerts.append({
-                'type': 'danger',
-                'title': f"Budget Exceeded: {b['name']}",
-                'message': f"{b['name']} budget exceeded by {b['pct'] - 100}% this month."
-            })
-        elif b['pct'] >= 85:
-            alerts.append({
-                'type': 'warning',
-                'title': f"Budget Warning: {b['name']}",
-                'message': f"{b['name']} budget has reached {b['pct']}% of monthly limit."
-            })
+    # Identify primary account
+    primary_acc = next((a for a in accounts if a.get('is_default') or a.get('is_primary')), None)
+    if not primary_acc and accounts:
+        primary_acc = accounts[0]
+    primary_id = int(primary_acc['id']) if primary_acc else None
 
-    # 2. Upcoming Scheduled Calendar Bills (within next 7 days)
-    cal_events = fin_service.get_calendar_events(profile_id)
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    seven_days_later = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
-    for evt in cal_events:
-        if evt.get('status') == 'scheduled' and evt.get('type') == 'expense':
-            due = evt.get('dueDate') or evt.get('due_date')
-            if due and today_str <= due <= seven_days_later:
-                alerts.append({
-                    'type': 'warning',
-                    'title': f"Upcoming Bill: {evt.get('title')}",
-                    'message': f"{evt.get('title')} ({curr_symbol}{evt.get('amount')}) due on {due}."
-                })
+    # Determine active account: use explicitly requested account_id, or default to primary account
+    active_account_id = account_id if account_id is not None else primary_id
 
-    # 3. Negative Account Balance Warnings (< 0)
+    # Build individual account-wise & wallet-wise summaries
+    account_summaries = []
     for acc in accounts:
-        if acc.get('account_type') != 'credit_card' and acc.get('current_balance', 0) < 0:
-            alerts.append({
-                'type': 'danger',
-                'title': f"Negative Balance: {acc.get('name')}",
-                'message': f"{acc.get('name')} is in negative balance ({curr_symbol}{acc.get('current_balance')})."
-            })
-
-    if not alerts:
-        alerts.append({
-            'type': 'success',
-            'title': 'Healthy Financial State',
-            'message': 'All accounts and category spending are within safe limits.'
+        aid = int(acc['id'])
+        acc_totals = fin_service.get_ledger_totals(profile_id, account_id=aid)
+        acc_health = fin_service.calculate_health_score(profile_id, account_id=aid)
+        account_summaries.append({
+            'id': str(aid),
+            'name': acc['name'],
+            'account_type': acc['account_type'],
+            'type_label': acc.get('type_label', acc['account_type'].capitalize()),
+            'badge_class': acc.get('badge_class', ''),
+            'color': acc.get('color', '#3b82f6'),
+            'icon': acc.get('icon', 'bank'),
+            'is_default': bool(acc.get('is_default')),
+            'is_primary': bool(acc.get('is_default')),
+            'initial_balance': acc.get('initial_balance', 0),
+            'current_balance': acc.get('current_balance', 0),
+            'income': acc_totals['income'],
+            'expenses': acc_totals['expenses'],
+            'balance': acc_totals['balance'],
+            'savings': acc_totals['savings'],
+            'savings_rate': acc_totals['savings_rate'],
+            'health': acc_health,
+            'health_score': acc_health['score'],
+            'health_status': acc_health['status'],
+            'health_badge_class': acc_health['badge_class'],
+            'transaction_count': acc.get('transaction_count', 0)
         })
+
+    # Account-specific financial calculations
+    totals = fin_service.get_ledger_totals(profile_id, account_id=active_account_id)
+    category_spending = fin_service.get_category_spending(profile_id, account_id=active_account_id)
+    budgets = fin_service.get_budget_overview(profile_id, account_id=active_account_id)
+    health = fin_service.calculate_health_score(profile_id, account_id=active_account_id)
+    spending_insight = fin_service.generate_spending_insights(profile_id, account_id=active_account_id)
+    alerts = fin_service.get_financial_alerts(profile_id, account_id=active_account_id)
+    diagnostics = fin_service.run_system_diagnostics(profile_id)
 
     return jsonify({
         'user': user,
+        'selected_account_id': str(active_account_id) if active_account_id else None,
+        'primary_account_id': str(primary_id) if primary_id else None,
+        'account_summaries': account_summaries,
+        'accounts': accounts,
         'totals': totals,
         'category_spending': category_spending,
         'budgets': budgets,
         'health': health,
+        'spending_insight': spending_insight,
         'alerts': alerts,
-        'accounts': accounts
+        'diagnostics': diagnostics
     })
 
 # --- Accounts & Account Types ---
@@ -375,7 +384,14 @@ def delete_transaction(tx_id):
 def list_budgets():
     profile_id = get_current_profile_id()
     month = request.args.get('month')
-    budgets = fin_service.get_budget_overview(profile_id, month_year=month)
+    acc_param = request.args.get('account_id')
+    account_id = None
+    if acc_param and acc_param != 'ALL' and acc_param.lower() != 'null' and acc_param != '':
+        try:
+            account_id = int(acc_param)
+        except ValueError:
+            account_id = None
+    budgets = fin_service.get_budget_overview(profile_id, month_year=month, account_id=account_id)
     return jsonify({'budgets': budgets})
 
 @api_bp.route('/budgets', methods=['POST'])
@@ -400,6 +416,48 @@ def delete_budget(category_id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+# --- Live System Diagnostics ---
+@api_bp.route('/diagnostics', methods=['GET'])
+def get_diagnostics():
+    profile_id = get_current_profile_id()
+    diagnostics = fin_service.run_system_diagnostics(profile_id)
+    return jsonify({'diagnostics': diagnostics})
+
+# --- Account-wise & Wallet-wise Summaries ---
+@api_bp.route('/accounts/summary', methods=['GET'])
+def get_accounts_summary():
+    profile_id = get_current_profile_id()
+    accounts = fin_service.get_accounts(profile_id)
+    summaries = []
+    for acc in accounts:
+        aid = int(acc['id'])
+        acc_totals = fin_service.get_ledger_totals(profile_id, account_id=aid)
+        acc_health = fin_service.calculate_health_score(profile_id, account_id=aid)
+        summaries.append({
+            'id': str(aid),
+            'name': acc['name'],
+            'account_type': acc['account_type'],
+            'type_label': acc.get('type_label', acc['account_type'].capitalize()),
+            'badge_class': acc.get('badge_class', ''),
+            'color': acc.get('color', '#3b82f6'),
+            'icon': acc.get('icon', 'bank'),
+            'is_default': bool(acc.get('is_default')),
+            'is_primary': bool(acc.get('is_default')),
+            'initial_balance': acc.get('initial_balance', 0),
+            'current_balance': acc.get('current_balance', 0),
+            'income': acc_totals['income'],
+            'expenses': acc_totals['expenses'],
+            'balance': acc_totals['balance'],
+            'savings': acc_totals['savings'],
+            'savings_rate': acc_totals['savings_rate'],
+            'health': acc_health,
+            'health_score': acc_health['score'],
+            'health_status': acc_health['status'],
+            'health_badge_class': acc_health['badge_class'],
+            'transaction_count': acc.get('transaction_count', 0)
+        })
+    return jsonify({'account_summaries': summaries})
 
 # --- Savings Goals ---
 @api_bp.route('/goals', methods=['GET'])

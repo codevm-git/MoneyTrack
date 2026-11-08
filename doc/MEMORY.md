@@ -1,12 +1,12 @@
 # MoneyTrack — Persistent AI Project Context & Memory
 
-**Document Version:** 1.0.0  
+**Document Version:** 1.1.0  
 **Status:** Living Engineering Memory & AI Context Anchor  
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/MEMORY.md`  
-**Current Release Version:** `v0.2.1-beta` (Git Commit: `c37a834`, Stable Target: `v1.0.0`)  
-**Test Suite Status:** 50/50 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.2.2-beta` (Stable Target: `v1.0.0`)  
+**Test Suite Status:** 57/57 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -108,10 +108,11 @@ flowchart LR
 ├── templates/
 │   ├── index.html               # Authoritative single-page application UI matching reference
 │   └── report.html              # Printer-ready & PDF exportable monthly statement
-├── tests/                       # Automated test suite (50 tests, 100% pass)
+├── tests/                       # Automated test suite (57 tests, 100% pass)
 │   ├── test_accounts.py
 │   ├── test_api.py
 │   ├── test_calculators.py
+│   ├── test_dashboard_analytics_and_alerts.py
 │   ├── test_e2e_workflows.py
 │   ├── test_financial_service.py
 │   ├── test_security_and_integrity.py
@@ -174,9 +175,9 @@ flowchart LR
 ---
 
 ## 11. Current Development Stage & Milestones
-- **Git Commit:** `c37a834` (`v0.2.1-beta fixed general and settings related issues`).
+- **Current Version:** `v0.2.2-beta` (Dashboard Account-Wise Analytics, Category Budget Limits Manager, Dynamic Insights, Real-Time Alerts, Live System Diagnostics & Background Tab Notifications).
 - **Core Architecture:** 100% Implemented (Flask backend, SQLite schema, Jinja2 views, REST APIs).
-- **Test Matrix:** 50/50 automated tests passing across 7 test suites.
+- **Test Matrix:** 57/57 automated tests passing across 8 test suites.
 - **Offline Packaging:** Vendored offline dependencies verified.
 
 ---

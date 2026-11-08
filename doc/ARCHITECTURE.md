@@ -6,7 +6,7 @@
 **Application Name:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/ARCHITECTURE.md`  
-**Current Release Version:** `v0.2.1-beta` (Git Commit: `c37a834`, Target: `v1.0.0 Stable`)  
+**Current Release Version:** `v0.2.2-beta` (Git Commit: `c37a834`, Target: `v1.0.0 Stable`)  
 
 ---
 
@@ -209,10 +209,10 @@ app/
 │   ├── connection.py           # SQLite connection pool, WAL mode, foreign keys, migrations, seeders
 │   └── schema.sql              # 11-table relational schema with integer paise currency fields
 ├── routes/
-│   ├── api.py                  # REST API Blueprint (/api/*)
+│   ├── api.py                  # REST API Blueprint (/api/*, /api/dashboard, /api/diagnostics, /api/accounts/summary)
 │   └── views.py                # View Blueprint (/ and /report/monthly)
 └── services/
-    ├── financial_service.py    # Multi-account balances, ledger, budgets, goals, health score
+    ├── financial_service.py    # Multi-account balances, ledger, budgets, goals, health score, insights, alerts, diagnostics
     ├── calculator_service.py   # EMI, compound interest, inflation, purchase affordability engines
     ├── learning_service.py     # Lessons curriculum, interactive quizzes, achievements
     ├── backup_service.py       # JSON backup export/import and CSV statement export
@@ -224,6 +224,13 @@ The local execution entry point `run.py` boots the Flask application on `http://
 - Sets environment variables and ensures `vendor/` is in `sys.path`.
 - Calls `create_app()` which runs database initialization and non-destructive migrations.
 - Starts the local WSGI server with thread support.
+
+### 7.3 Dashboard Analytics, Diagnostics & Alerting Architecture
+- **Account-Scoped Analytics:** `/api/dashboard?account_id=X` isolates KPI totals, category breakdowns, budgets, and health scores to the specified account, defaulting to the profile's primary account.
+- **Rule-Based Insights Engine:** `FinancialService.generate_spending_insights()` executes transparent comparative analysis (month-over-month category variance, large unusual spends) without external AI models or cloud dependencies.
+- **Real-Time Financial Alerts:** `FinancialService.get_financial_alerts()` evaluates 6 deterministic conditions (budget exceeded, threshold warning, low balance < ₹1,000, credit card balance, upcoming bills) and deduplicates alerts.
+- **Live Integrity Diagnostics:** `FinancialService.run_system_diagnostics()` executes 5 database integrity tests: Ledger calculation consistency, Transaction references, Category budget bounds, Account configuration, and SQLite WAL/FK PRAGMA status.
+- **Background Tab Notifications:** The client uses `window.Notification` when the tab is hidden (`document.hidden`), title flashing, and an in-app toast stack (`showToast()`) with zero external notification services.
 
 ---
 
@@ -336,13 +343,14 @@ erDiagram
 
 ## 12. Verification & Testing
 
-The application architecture is verified by a 50-test automated test suite across 7 modules:
+The application architecture is verified by a 57-test automated test suite across 8 modules:
 - `tests/test_accounts.py` (8 tests)
 - `tests/test_api.py` (8 tests)
 - `tests/test_calculators.py` (3 tests)
+- `tests/test_dashboard_analytics_and_alerts.py` (7 tests)
 - `tests/test_e2e_workflows.py` (5 tests)
 - `tests/test_financial_service.py` (6 tests)
 - `tests/test_security_and_integrity.py` (12 tests)
 - `tests/test_username_auth.py` (8 tests)
 
-Running `python3 -m unittest discover -s tests` confirms **50 tests ran and 50 passed (100% pass rate)**.
+Running `python3 -m unittest discover -s tests` confirms **57 tests ran and 57 passed (100% pass rate)**.
