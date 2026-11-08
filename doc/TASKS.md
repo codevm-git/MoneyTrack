@@ -5,8 +5,8 @@
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Requirement:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/TASKS.md`  
-**Current Release Version:** `v0.2.1-beta` (Git Commit: `c37a834`, Target: `v1.0.0 Stable`)  
-**Test Suite Status:** 50/50 Tests Passing (`python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.2.2-beta` (Git Commit: `c37a834`, Target: `v1.0.0 Stable`)  
+**Test Suite Status:** 57/57 Tests Passing (`python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -34,8 +34,11 @@ gantt
     section Phase 5: Auth & Settings
     Username Auth & Password Hashing    :done, p5_1, 2026-10-19, 2026-10-31
     Offline Bundling & 50 Unit Tests    :done, p5_2, 2026-10-17, 2026-10-31
+    section Phase 6: Dashboard & Alerts
+    Account-Wise Analytics & Budgets    :done, p6_1, 2026-11-01, 2026-11-08
+    Diagnostics & Notifications         :done, p6_2, 2026-11-01, 2026-11-08
     section Future Roadmap
-    Standalone OS Binaries (PyInstaller):p6_1, 2026-11-15, 14d
+    Standalone OS Binaries (PyInstaller):p7_1, 2026-11-15, 14d
 ```
 
 ### Milestone Progress Summary
@@ -48,7 +51,7 @@ gantt
 | **Phase 3** | Financial Literacy & Gamification | **Completed (100%)** | Lessons curriculum, interactive quizzes with feedback, achievement catalog. |
 | **Phase 4** | Financial Calculators & Intelligence | **Completed (100%)** | Reducing-balance EMI, CI, Inflation, Affordability Evaluator, Health Score (0–100). |
 | **Phase 5** | Authentication, Settings & Air-Gap | **Completed (100%)** | Multi-profile username authentication, password hashing, local vendor bundling. |
-| **Phase 6** | Automated Quality Assurance | **Completed (100%)** | 50 unit and integration tests passing across all 7 test modules. |
+| **Phase 6** | Dashboard Analytics, Budget Limits, Alerts & Diagnostics | **Completed (100%)** | Account-wise filtering, Budget Manager Modal, Dynamic Insights, 5-point Diagnostics, Toast Stack. |
 | **Backlog** | Standalone Desktop Packaging | **Planned** | Standalone PyInstaller / AppImage distribution. |
 
 ---
@@ -241,19 +244,45 @@ gantt
 - [x] **TASK-503: 100% Offline Air-Gap Verification**
   - **Description:** Pre-packaged local `static/vendor/tailwind.min.js`, `static/vendor/chart.umd.min.js`, and offline Python package distribution in `vendor/`.
   - **Verification:** Verified in `templates/index.html` and `app/__init__.py`.
-- [x] **TASK-504: Comprehensive Test Suite (50 Tests, 100% Pass)**
-  - **Description:** Complete automated test suite covering accounts, API, calculators, E2E workflows, financial service, security, and authentication.
-  - **Verification:** Verified via `python3 -m unittest discover -s tests` (Ran 50 tests in ~45s, OK).
+- [x] **TASK-504: Comprehensive Test Suite (57 Tests, 100% Pass)**
+  - **Description:** Complete automated test suite covering accounts, API, calculators, E2E workflows, financial service, security, authentication, and dashboard analytics/alerts.
+  - **Verification:** Verified via `python3 -m unittest discover -s tests` (Ran 57 tests, OK).
 
 ---
 
-## Phase 6 — Future Roadmap & Distribution (Planned)
+## Phase 6 — Dashboard Account-Wise Analytics, Category Budget Management, Real-Time Alerts & Diagnostics (Completed)
 
-- [ ] **TASK-601: PyInstaller Standalone Windows Executable**
+- [x] **TASK-601: Account-Wise & Wallet-Wise Financial Dashboard Data**
+  - **Description:** Scoped financial summary generation per account/wallet (inflows, outflows, balance, savings rate) with visual switcher pills and accounts breakdown grid; clearly labels Primary account.
+  - **Verification:** Verified in `app/services/financial_service.py` (`get_ledger_totals`, `get_accounts`) and `tests/test_dashboard_analytics_and_alerts.py`.
+- [x] **TASK-602: Account-Specific Health Score & Visualizations**
+  - **Description:** Scopes Health Score (0–100, 3 pillars) and Category Spending SVG donut chart strictly to the selected account without mixing funds from other accounts.
+  - **Verification:** Verified in `app/services/financial_service.py` (`calculate_health_score`, `get_category_spending`) and `tests/test_dashboard_analytics_and_alerts.py`.
+- [x] **TASK-603: Category Budget Limits Management Interface**
+  - **Description:** Dedicated Category Budget Management modal (`#budget-manager-modal`) enabling creating, updating, and deleting monthly category spending limits with real-time spent, remaining, and percentage progress bars.
+  - **Verification:** Verified in `templates/index.html`, `static/js/app.js` (`openBudgetManagerModal`, `handleSaveBudget`, `deleteBudget`), and `app/routes/api.py`.
+- [x] **TASK-604: Responsive Category Spending Breakdown Layout & Label Wrapping**
+  - **Description:** Moved top category labels cleanly below the donut chart with full word-wrapping (`break-words`), eliminating SVG center text clipping and overflow.
+  - **Verification:** Verified in `templates/index.html` and `static/js/app.js`.
+- [x] **TASK-605: Dynamic English Spending Insights Engine**
+  - **Description:** Deterministic month-over-month category variance analysis highlighting spending surges, drops, and large individual purchases (> ₹5,000) using plain English.
+  - **Verification:** Verified in `FinancialService.generate_spending_insights()` and `tests/test_dashboard_analytics_and_alerts.py`.
+- [x] **TASK-606: Real-Time Financial Alerts & Warning System**
+  - **Description:** Live database state evaluation checking budget overruns (>100%), threshold warnings (>=85%), low account balances (< ₹1,000), credit card balances, and upcoming bills. Deduplicated alert records with dismiss controls.
+  - **Verification:** Verified in `FinancialService.get_financial_alerts()` and `tests/test_dashboard_analytics_and_alerts.py`.
+- [x] **TASK-607: Live System Diagnostics & Background Tab Notifications**
+  - **Description:** 5-point database integrity diagnostics engine (ledger consistency, transaction references, category budget bounds, account configuration, and SQLite WAL/FK status). Client toast notification stack and `document.hidden` tab notification integration.
+  - **Verification:** Verified in `FinancialService.run_system_diagnostics()`, `GET /api/diagnostics`, `static/js/app.js`, and `tests/test_dashboard_analytics_and_alerts.py`.
+
+---
+
+## Phase 7 — Future Packaging & Distribution (Planned)
+
+- [ ] **TASK-701: PyInstaller Standalone Windows Executable**
   - **Description:** Package MoneyTrack as a single-file portable `.exe` bundle for offline Windows execution.
   - **Priority:** Medium
   - **Dependencies:** None (App is fully functional via `python run.py`).
-- [ ] **TASK-602: Linux AppImage / Debian Package**
+- [ ] **TASK-702: Linux AppImage / Debian Package**
   - **Description:** Package MoneyTrack with desktop launcher integration for Linux workstations.
   - **Priority:** Medium
   - **Dependencies:** None.
