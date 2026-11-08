@@ -1429,9 +1429,16 @@ const MoneyTrackApp = {
     grid.innerHTML = '';
     if (this.state.accounts.length === 0) {
       grid.innerHTML = `
-        <div class="col-span-full p-6 rounded-2xl border border-dashed border-gray-200 dark:border-slate-800 text-center text-xs text-slate-400 space-y-2">
+        <div class="col-span-full p-6 rounded-2xl border border-dashed border-gray-200 dark:border-slate-800 text-center text-xs text-slate-400 space-y-3">
+          <div class="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+            <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>
+          </div>
           <p class="font-semibold text-slate-700 dark:text-slate-300">No accounts configured yet.</p>
-          <p>Click "+ New Account" to add your bank account, cash wallet, or credit card.</p>
+          <p class="max-w-xs mx-auto text-[11px]">You must create at least one account or wallet before you can add income, expenses, or transfers.</p>
+          <button onclick="MoneyTrackApp.openAddAccountModal()" class="py-2 px-3.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold inline-flex items-center space-x-1.5 transition shadow-sm">
+            <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Create First Account</span>
+          </button>
         </div>
       `;
       return;
@@ -1498,6 +1505,9 @@ const MoneyTrackApp = {
                 </div>
               </div>
               <div class="flex items-center space-x-1">
+                <button onclick="MoneyTrackApp.openTransferModal(${acc.id})" title="Transfer money from this account" class="p-1 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+                  <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16"/></svg>
+                </button>
                 <button onclick="MoneyTrackApp.filterByAccount(${acc.id})" title="Filter transactions for this account" class="p-1 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
                   <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
                 </button>
@@ -1527,6 +1537,8 @@ const MoneyTrackApp = {
   populateAccountSelects: function() {
     const filterSelect = document.getElementById('tx-account-filter');
     const formSelect = document.getElementById('tx-form-account');
+    const editAccSelect = document.getElementById('edit-tx-account');
+    const editDestSelect = document.getElementById('edit-tx-dest-account');
     const xferFrom = document.getElementById('transfer-form-from');
     const xferTo = document.getElementById('transfer-form-to');
     const goalAccount = document.getElementById('goal-form-account');
@@ -1536,7 +1548,7 @@ const MoneyTrackApp = {
       const curFilterVal = filterSelect.value || 'ALL';
       filterSelect.innerHTML = '<option value="ALL">All Accounts</option>';
       this.state.accounts.forEach(acc => {
-        filterSelect.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+        filterSelect.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
       });
       filterSelect.value = curFilterVal;
     }
@@ -1544,15 +1556,40 @@ const MoneyTrackApp = {
     if (formSelect) {
       const curFormVal = formSelect.value;
       formSelect.innerHTML = '';
+      if (this.state.accounts.length === 0) {
+        formSelect.innerHTML = '<option value="">No account available - Create one first</option>';
+      } else {
+        this.state.accounts.forEach(acc => {
+          formSelect.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
+        });
+        const defAcc = this.state.accounts.find(a => a.is_default) || this.state.accounts[0];
+        if (curFormVal && this.state.accounts.some(a => String(a.id) === String(curFormVal))) {
+          formSelect.value = curFormVal;
+        } else if (defAcc) {
+          formSelect.value = defAcc.id;
+        }
+      }
+    }
+
+    if (editAccSelect) {
+      const curEditAcc = editAccSelect.value;
+      editAccSelect.innerHTML = '';
       this.state.accounts.forEach(acc => {
-        formSelect.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+        editAccSelect.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
       });
-      // Pick default account if available and no previous selection
-      const defAcc = this.state.accounts.find(a => a.is_default) || this.state.accounts[0];
-      if (curFormVal && this.state.accounts.some(a => String(a.id) === String(curFormVal))) {
-        formSelect.value = curFormVal;
-      } else if (defAcc) {
-        formSelect.value = defAcc.id;
+      if (curEditAcc && this.state.accounts.some(a => String(a.id) === String(curEditAcc))) {
+        editAccSelect.value = curEditAcc;
+      }
+    }
+
+    if (editDestSelect) {
+      const curEditDest = editDestSelect.value;
+      editDestSelect.innerHTML = '';
+      this.state.accounts.forEach(acc => {
+        editDestSelect.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
+      });
+      if (curEditDest && this.state.accounts.some(a => String(a.id) === String(curEditDest))) {
+        editDestSelect.value = curEditDest;
       }
     }
 
@@ -1562,8 +1599,8 @@ const MoneyTrackApp = {
       xferFrom.innerHTML = '';
       xferTo.innerHTML = '';
       this.state.accounts.forEach(acc => {
-        xferFrom.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
-        xferTo.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+        xferFrom.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
+        xferTo.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
       });
       if (curFrom && this.state.accounts.some(a => String(a.id) === String(curFrom))) {
         xferFrom.value = curFrom;
@@ -1579,7 +1616,7 @@ const MoneyTrackApp = {
       const curVal = goalAccount.value;
       goalAccount.innerHTML = '<option value="">Do not deduct from an account</option>';
       this.state.accounts.forEach(acc => {
-        goalAccount.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+        goalAccount.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
       });
       if (curVal) goalAccount.value = curVal;
     }
@@ -1588,7 +1625,7 @@ const MoneyTrackApp = {
       const curVal = goalActionAcc.value;
       goalActionAcc.innerHTML = '<option value="">Select Account / Wallet (Optional)</option>';
       this.state.accounts.forEach(acc => {
-        goalActionAcc.innerHTML += `<option value="${acc.id}">${acc.name} (${acc.type_label})</option>`;
+        goalActionAcc.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
       });
       if (curVal) goalActionAcc.value = curVal;
     }
@@ -1612,7 +1649,7 @@ const MoneyTrackApp = {
     const is_default = document.getElementById('acc-form-default').checked;
 
     if (!name) {
-      alert('Please enter an account name.');
+      this.showToast('Validation Error', 'Please enter an account name.', 'warning');
       return;
     }
 
@@ -1629,10 +1666,13 @@ const MoneyTrackApp = {
     }).then(r => r.json()).then(res => {
       if (res.success) {
         this.closeModal('add-account-modal');
+        this.showToast('Account Created', `Account "${name}" created successfully with initial balance ₹${initial_balance.toLocaleString()}.`, 'success');
         this.refreshAllData();
       } else {
-        alert(res.error || 'Failed to create account.');
+        this.showToast('Error', res.error || 'Failed to create account.', 'danger');
       }
+    }).catch(err => {
+      this.showToast('Error', 'Failed to save account.', 'danger');
     });
   },
 
@@ -1660,12 +1700,16 @@ const MoneyTrackApp = {
     }
   },
 
-  openTransferModal: function() {
+  openTransferModal: function(preselectedFromId = null) {
     if (this.state.accounts.length < 2) {
-      alert('Please create at least 2 accounts or wallets before making a transfer.');
+      this.showToast('Transfer Requires 2 Accounts', 'Please create at least 2 accounts or wallets before making a transfer.', 'warning');
       return;
     }
     this.populateAccountSelects();
+    if (preselectedFromId) {
+      const fromEl = document.getElementById('transfer-form-from');
+      if (fromEl) fromEl.value = String(preselectedFromId);
+    }
     document.getElementById('transfer-form-amount').value = '';
     document.getElementById('transfer-form-desc').value = '';
     document.getElementById('transfer-form-date').value = new Date().toISOString().split('T')[0];
@@ -1691,6 +1735,7 @@ const MoneyTrackApp = {
         errEl.textContent = 'Source and destination accounts must be different.';
         errEl.classList.remove('hidden');
       }
+      this.showToast('Validation Error', 'Source and destination accounts must be different.', 'warning');
       return;
     }
     if (isNaN(amount) || amount <= 0) {
@@ -1698,6 +1743,7 @@ const MoneyTrackApp = {
         errEl.textContent = 'Please enter a valid transfer amount greater than 0.';
         errEl.classList.remove('hidden');
       }
+      this.showToast('Validation Error', 'Please enter a valid transfer amount greater than 0.', 'warning');
       return;
     }
 
@@ -1716,23 +1762,25 @@ const MoneyTrackApp = {
       .then(res => {
         if (res.success) {
           this.closeModal('transfer-modal');
-          this.showToast('Transfer Completed', 'Transferred funds between accounts successfully.', 'success');
+          this.showToast('Transfer Completed', `Transferred ${this.state.user.currency}${amount.toLocaleString()} between accounts successfully.`, 'success');
           this.refreshAllData();
         } else {
+          const errMsg = res.error || 'Failed to complete transfer.';
           if (errEl) {
-            errEl.textContent = res.error || 'Failed to complete transfer.';
+            errEl.textContent = errMsg;
             errEl.classList.remove('hidden');
-          } else {
-            alert(res.error || 'Failed to complete transfer.');
           }
+          this.showToast('Transfer Error', errMsg, 'danger');
         }
       })
       .catch(err => {
         console.error('Transfer error:', err);
+        const errMsg = 'An unexpected error occurred while executing the transfer.';
         if (errEl) {
-          errEl.textContent = 'An unexpected error occurred.';
+          errEl.textContent = errMsg;
           errEl.classList.remove('hidden');
         }
+        this.showToast('Transfer Failed', errMsg, 'danger');
       });
   },
 
@@ -1774,6 +1822,7 @@ const MoneyTrackApp = {
     let filtered = this.state.transactions.filter(tx => {
       if (this.state.transactionsFilter === 'income' && tx.type !== 'income') return false;
       if (this.state.transactionsFilter === 'expense' && tx.type !== 'expense') return false;
+      if (this.state.transactionsFilter === 'transfer' && tx.type !== 'transfer') return false;
       if (this.state.transactionsFilter === 'subscriptions' && !(tx.category === 'Bills & Utilities' || tx.description.toLowerCase().includes('pass') || tx.description.toLowerCase().includes('sub'))) return false;
       if (catFilter !== 'ALL' && tx.category !== catFilter) return false;
       if (accFilter !== 'ALL' && String(tx.account_id) !== String(accFilter) && String(tx.destination_account_id) !== String(accFilter)) return false;
@@ -1791,30 +1840,98 @@ const MoneyTrackApp = {
     filtered.forEach(tx => {
       const isIncome = tx.type === 'income';
       const isTransfer = tx.type === 'transfer';
-      const amtColor = isIncome ? 'text-brand-600 dark:text-brand-400 font-bold' : (isTransfer ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-900 dark:text-white font-bold');
-      const sign = isIncome ? '+' : (isTransfer ? '↔ ' : '-');
-      const accName = tx.account_name || 'Unassigned';
-      const accIcon = typeIcons[tx.account_type] || '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
-      const tagDisplay = isTransfer ? 'Transfer' : (tx.typeTag || tx.type);
+      const sourceName = tx.source_account_name || tx.account_name || 'Account';
+      const destName = tx.dest_account_name || tx.dest_name || 'Destination';
+      const sourceIcon = typeIcons[tx.account_type] || '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+      const destIcon = typeIcons[tx.dest_type] || '<svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+
+      let amtDisplay = '';
+      let amtColor = '';
+      let tagHtml = '';
+      let accountHtml = '';
+
+      if (isTransfer) {
+        if (accFilter !== 'ALL') {
+          if (String(tx.account_id) === String(accFilter)) {
+            // Outgoing transfer from active filtered account
+            amtDisplay = `-${this.state.user.currency}${parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            amtColor = 'text-slate-900 dark:text-white font-bold';
+            tagHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Transfer Out</span>`;
+            accountHtml = `
+              <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+                <span class="text-slate-400 font-medium">To:</span>
+                <span>${destIcon}</span>
+                <span>${this.escapeHtml(destName)}</span>
+              </span>
+            `;
+          } else {
+            // Incoming transfer to active filtered account
+            amtDisplay = `+${this.state.user.currency}${parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            amtColor = 'text-brand-600 dark:text-brand-400 font-bold';
+            tagHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 border border-brand-200 dark:border-brand-800">Transfer In</span>`;
+            accountHtml = `
+              <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+                <span class="text-slate-400 font-medium">From:</span>
+                <span>${sourceIcon}</span>
+                <span>${this.escapeHtml(sourceName)}</span>
+              </span>
+            `;
+          }
+        } else {
+          // All accounts transfer display
+          amtDisplay = `↔ ${this.state.user.currency}${parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          amtColor = 'text-blue-600 dark:text-blue-400 font-bold';
+          tagHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">Transfer</span>`;
+          accountHtml = `
+            <div class="flex items-center space-x-1 text-[10px]">
+              <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded font-medium bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+                <span>${sourceIcon}</span>
+                <span>${this.escapeHtml(sourceName)}</span>
+              </span>
+              <span class="text-slate-400 font-bold">→</span>
+              <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                <span>${destIcon}</span>
+                <span>${this.escapeHtml(destName)}</span>
+              </span>
+            </div>
+          `;
+        }
+      } else if (isIncome) {
+        amtDisplay = `+${this.state.user.currency}${parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        amtColor = 'text-brand-600 dark:text-brand-400 font-bold';
+        tagHtml = `<span class="capitalize text-slate-500">Income</span>`;
+        accountHtml = `
+          <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+            <span>${sourceIcon}</span>
+            <span>${this.escapeHtml(sourceName)}</span>
+          </span>
+        `;
+      } else {
+        // Regular expense
+        amtDisplay = `-${this.state.user.currency}${parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        amtColor = 'text-slate-900 dark:text-white font-bold';
+        tagHtml = `<span class="capitalize text-slate-500">${this.escapeHtml(tx.typeTag || 'expense')}</span>`;
+        accountHtml = `
+          <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+            <span>${sourceIcon}</span>
+            <span>${this.escapeHtml(sourceName)}</span>
+          </span>
+        `;
+      }
 
       tbody.innerHTML += `
         <tr class="hover:bg-gray-50/50 dark:hover:bg-slate-900/40 transition">
-          <td class="py-3 px-4 font-medium text-slate-500">${tx.date}</td>
-          <td class="py-3 px-4 font-semibold text-slate-900 dark:text-white">${tx.description}</td>
-          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${tx.category}</span></td>
-          <td class="py-3 px-4">
-            <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
-              <span>${accIcon}</span>
-              <span>${accName}</span>
-            </span>
-          </td>
-          <td class="py-3 px-4"><span class="capitalize text-slate-500">${tagDisplay}</span></td>
-          <td class="py-3 px-4 text-right ${amtColor}">${sign}${this.state.user.currency}${parseFloat(tx.amount).toLocaleString()}</td>
+          <td class="py-3 px-4 font-medium text-slate-500">${this.escapeHtml(tx.date)}</td>
+          <td class="py-3 px-4 font-semibold text-slate-900 dark:text-white">${this.escapeHtml(tx.description)}</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${this.escapeHtml(tx.category)}</span></td>
+          <td class="py-3 px-4">${accountHtml}</td>
+          <td class="py-3 px-4">${tagHtml}</td>
+          <td class="py-3 px-4 text-right ${amtColor}">${amtDisplay}</td>
           <td class="py-3 px-4 text-center">
-            <button onclick="MoneyTrackApp.promptEditTransaction('${tx.id}')" class="p-1 rounded text-slate-400 hover:text-brand-600 transition mr-1" title="Edit Transaction">
+            <button onclick="MoneyTrackApp.openEditTransactionModal('${tx.id}')" class="p-1 rounded text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition mr-1" title="Edit Transaction">
               <svg class="w-4 h-4 stroke-current fill-none stroke-2 inline" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </button>
-            <button onclick="MoneyTrackApp.deleteTransaction('${tx.id}')" class="p-1 rounded text-slate-400 hover:text-accent-rose transition" title="Delete Transaction">
+            <button onclick="MoneyTrackApp.deleteTransaction('${tx.id}')" class="p-1 rounded text-slate-400 hover:text-accent-rose hover:bg-gray-100 dark:hover:bg-slate-800 transition" title="Delete Transaction">
               <svg class="w-4 h-4 stroke-current fill-none stroke-2 inline" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </td>
@@ -1824,20 +1941,39 @@ const MoneyTrackApp = {
   },
 
   openAddTransactionModal: function(type) {
+    // Check if user has accounts created
+    if (this.state.accounts.length === 0) {
+      this.openModal('account-required-modal');
+      return;
+    }
+
     document.getElementById('tx-form-type').value = type;
     document.getElementById('tx-modal-title').textContent = type === 'income' ? 'Add Income' : 'Add Expense';
     document.getElementById('tx-form-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('tx-form-amount').value = '';
     document.getElementById('tx-form-desc').value = '';
 
-    // Toggle necessity container: hide for income, show for expense
+    const descInput = document.getElementById('tx-form-desc');
+    const amountInput = document.getElementById('tx-form-amount');
     const necContainer = document.getElementById('tx-form-necessity-container');
-    if (necContainer) {
-      if (type === 'income') {
-        necContainer.classList.add('hidden');
-      } else {
-        necContainer.classList.remove('hidden');
-      }
+    const warningEl = document.getElementById('tx-no-account-warning');
+    const submitBtn = document.getElementById('tx-form-submit-btn');
+
+    if (warningEl) warningEl.classList.add('hidden');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    // Set context-specific placeholders and necessity classification
+    if (type === 'income') {
+      if (descInput) descInput.placeholder = 'e.g. Monthly Salary, Freelance Payment, Rental Income, Investment Dividend';
+      if (amountInput) amountInput.placeholder = '50000.00';
+      if (necContainer) necContainer.classList.add('hidden');
+    } else {
+      if (descInput) descInput.placeholder = 'e.g. Grocery Shopping, Electric Bill, Restaurant Dinner, Fuel';
+      if (amountInput) amountInput.placeholder = '1500.00';
+      if (necContainer) necContainer.classList.remove('hidden');
     }
 
     // Populate category dropdown based on type
@@ -1847,12 +1983,12 @@ const MoneyTrackApp = {
       if (type === 'income') {
         const incomeCats = ['Salary', 'Freelance', 'Investments', 'Rental', 'Bonus', 'Gifts', 'Other Income'];
         incomeCats.forEach(c => {
-          catSelect.innerHTML += `<option value="${c}">${c}</option>`;
+          catSelect.innerHTML += `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)}</option>`;
         });
       } else {
-        const expenseCats = ['Housing', 'Food & Dining', 'Transportation', 'Utilities', 'Healthcare', 'Entertainment', 'Shopping', 'Personal', 'Education', 'Debt & Loans', 'Savings & Investments', 'Other'];
+        const expenseCats = ['Housing', 'Food & Dining', 'Transportation', 'Bills & Utilities', 'Healthcare', 'Entertainment', 'Shopping', 'Personal', 'Education', 'Debt & Loans', 'Savings & Investments', 'Other'];
         expenseCats.forEach(c => {
-          catSelect.innerHTML += `<option value="${c}">${c}</option>`;
+          catSelect.innerHTML += `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)}</option>`;
         });
       }
     }
@@ -1863,15 +1999,34 @@ const MoneyTrackApp = {
 
   submitTransactionForm: function(e) {
     e.preventDefault();
+    if (this.state.accounts.length === 0) {
+      this.closeModal('add-tx-modal');
+      this.openModal('account-required-modal');
+      return;
+    }
+
     const type = document.getElementById('tx-form-type').value;
     const amount = parseFloat(document.getElementById('tx-form-amount').value);
-    const desc = document.getElementById('tx-form-desc').value;
+    const desc = document.getElementById('tx-form-desc').value.trim();
     const category = document.getElementById('tx-form-category').value;
     const date = document.getElementById('tx-form-date').value;
     const typeTagInput = document.querySelector('input[name="tx_type_tag"]:checked');
     const typeTag = type === 'income' ? 'necessary' : (typeTagInput ? typeTagInput.value : 'necessary');
     const accountEl = document.getElementById('tx-form-account');
     const account_id = accountEl && accountEl.value ? parseInt(accountEl.value) : null;
+
+    if (!account_id) {
+      this.showToast('Account Required', 'Please select or create an account or wallet first.', 'warning');
+      return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+      this.showToast('Validation Error', 'Please enter a valid amount greater than 0.', 'warning');
+      return;
+    }
+    if (!desc) {
+      this.showToast('Validation Error', 'Please enter a transaction description.', 'warning');
+      return;
+    }
 
     fetch('/api/transactions', {
       method: 'POST',
@@ -1885,43 +2040,185 @@ const MoneyTrackApp = {
       } else {
         this.showToast('Error', res.error || 'Failed to save transaction.', 'danger');
       }
+    }).catch(err => {
+      this.showToast('Error', 'Failed to save transaction.', 'danger');
     });
   },
 
-  promptEditTransaction: function(id) {
+  // ==========================================
+  // Complete Transaction Editing Custom GUI
+  // ==========================================
+  openEditTransactionModal: function(id) {
     const tx = this.state.transactions.find(t => String(t.id) === String(id));
-    if (!tx) return;
-    const newDesc = prompt('Edit Description:', tx.description);
-    if (!newDesc) return;
-    const newAmtStr = prompt('Edit Amount (' + this.state.user.currency + '):', tx.amount);
-    if (!newAmtStr) return;
-    const newAmt = parseFloat(newAmtStr);
-    if (isNaN(newAmt) || newAmt <= 0) {
-      this.showToast('Validation Error', 'Please enter a valid positive amount.', 'danger');
+    if (!tx) {
+      this.showToast('Error', 'Transaction not found.', 'danger');
       return;
     }
-    const newDate = prompt('Edit Date (YYYY-MM-DD):', tx.date);
-    if (!newDate) return;
+
+    this.populateAccountSelects();
+
+    document.getElementById('edit-tx-id').value = tx.id;
+    document.getElementById('edit-tx-type').value = tx.type;
+    document.getElementById('edit-tx-amount').value = tx.amount;
+    document.getElementById('edit-tx-desc').value = tx.description;
+    document.getElementById('edit-tx-date').value = tx.date;
+
+    const titleEl = document.getElementById('edit-tx-modal-title');
+    const catGroup = document.getElementById('edit-tx-category-group');
+    const catSelect = document.getElementById('edit-tx-category');
+    const accLabel = document.getElementById('edit-tx-account-label');
+    const accSelect = document.getElementById('edit-tx-account');
+    const destContainer = document.getElementById('edit-tx-dest-account-container');
+    const destSelect = document.getElementById('edit-tx-dest-account');
+    const necContainer = document.getElementById('edit-tx-necessity-container');
+    const errEl = document.getElementById('edit-tx-error');
+
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    }
+
+    // Set accounts
+    if (accSelect && tx.account_id) {
+      accSelect.value = String(tx.account_id);
+    }
+
+    if (tx.type === 'transfer') {
+      if (titleEl) titleEl.textContent = 'Edit Transfer';
+      if (accLabel) accLabel.textContent = 'Source Account / Wallet (From)';
+      if (destContainer) destContainer.classList.remove('hidden');
+      if (destSelect && tx.destination_account_id) {
+        destSelect.value = String(tx.destination_account_id);
+      }
+      if (necContainer) necContainer.classList.add('hidden');
+      if (catGroup) catGroup.classList.add('hidden');
+    } else {
+      if (destContainer) destContainer.classList.add('hidden');
+      if (catGroup) catGroup.classList.remove('hidden');
+
+      if (tx.type === 'income') {
+        if (titleEl) titleEl.textContent = 'Edit Income';
+        if (accLabel) accLabel.textContent = 'Account / Wallet';
+        if (necContainer) necContainer.classList.add('hidden');
+        if (catSelect) {
+          catSelect.innerHTML = '';
+          const incomeCats = ['Salary', 'Freelance', 'Investments', 'Rental', 'Bonus', 'Gifts', 'Other Income'];
+          incomeCats.forEach(c => {
+            catSelect.innerHTML += `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)}</option>`;
+          });
+          catSelect.value = tx.category || 'Salary';
+        }
+      } else {
+        if (titleEl) titleEl.textContent = 'Edit Expense';
+        if (accLabel) accLabel.textContent = 'Account / Wallet';
+        if (necContainer) {
+          necContainer.classList.remove('hidden');
+          const radios = document.querySelectorAll('input[name="edit_tx_type_tag"]');
+          radios.forEach(r => {
+            r.checked = (r.value === (tx.typeTag || 'necessary'));
+          });
+        }
+        if (catSelect) {
+          catSelect.innerHTML = '';
+          const expenseCats = ['Housing', 'Food & Dining', 'Transportation', 'Bills & Utilities', 'Healthcare', 'Entertainment', 'Shopping', 'Personal', 'Education', 'Debt & Loans', 'Savings & Investments', 'Other'];
+          expenseCats.forEach(c => {
+            catSelect.innerHTML += `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)}</option>`;
+          });
+          catSelect.value = tx.category || 'Food & Dining';
+        }
+      }
+    }
+
+    this.openModal('edit-tx-modal');
+  },
+
+  submitEditTransactionForm: function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-tx-id').value;
+    const type = document.getElementById('edit-tx-type').value;
+    const amount = parseFloat(document.getElementById('edit-tx-amount').value);
+    const description = document.getElementById('edit-tx-desc').value.trim();
+    const date = document.getElementById('edit-tx-date').value;
+    const account_id = parseInt(document.getElementById('edit-tx-account').value);
+    const destSelect = document.getElementById('edit-tx-dest-account');
+    const destination_account_id = (type === 'transfer' && destSelect) ? parseInt(destSelect.value) : null;
+    const catSelect = document.getElementById('edit-tx-category');
+    const category = type === 'transfer' ? 'Transfer' : (catSelect ? catSelect.value : 'Other');
+    const tagRadio = document.querySelector('input[name="edit_tx_type_tag"]:checked');
+    const typeTag = type === 'income' ? 'necessary' : (tagRadio ? tagRadio.value : 'necessary');
+    const errEl = document.getElementById('edit-tx-error');
+
+    if (isNaN(amount) || amount <= 0) {
+      if (errEl) {
+        errEl.textContent = 'Please enter a valid amount greater than 0.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (!description) {
+      if (errEl) {
+        errEl.textContent = 'Please enter a description.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (!account_id) {
+      if (errEl) {
+        errEl.textContent = 'Please select an account or wallet.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (type === 'transfer' && (!destination_account_id || account_id === destination_account_id)) {
+      if (errEl) {
+        errEl.textContent = 'Source and destination accounts must be different.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
 
     fetch('/api/transactions/' + id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        description: newDesc,
-        amount: newAmt,
-        date: newDate,
-        category: tx.category,
-        type: tx.type,
-        account_id: tx.account_id
+        description,
+        amount,
+        date,
+        category,
+        type,
+        typeTag,
+        account_id,
+        destination_account_id
       })
-    }).then(r => r.json()).then(res => {
-      if (res.success) {
-        this.showToast('Transaction Updated', 'Transaction record updated successfully.', 'success');
-        this.refreshAllData();
-      } else {
-        this.showToast('Error', res.error || 'Failed to update transaction.', 'danger');
-      }
-    });
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          this.closeModal('edit-tx-modal');
+          this.showToast('Transaction Updated', 'Transaction record and balances updated successfully.', 'success');
+          this.refreshAllData();
+        } else {
+          const errMsg = res.error || 'Failed to update transaction.';
+          if (errEl) {
+            errEl.textContent = errMsg;
+            errEl.classList.remove('hidden');
+          }
+          this.showToast('Error', errMsg, 'danger');
+        }
+      })
+      .catch(err => {
+        console.error('Update error:', err);
+        const errMsg = 'An unexpected error occurred while updating the transaction.';
+        if (errEl) {
+          errEl.textContent = errMsg;
+          errEl.classList.remove('hidden');
+        }
+        this.showToast('Error', errMsg, 'danger');
+      });
+  },
+
+  promptEditTransaction: function(id) {
+    this.openEditTransactionModal(id);
   },
 
   deleteTransaction: function(id) {

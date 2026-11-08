@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.2-beta] - 2026-11-08
+
+### Added
+- **Account & Wallet Creation Guard:**
+  - Added strict guard preventing creation of Income or Expense transactions when no account or wallet exists.
+  - Implemented warning banner and modal (`#account-required-modal`) directing user to create an account first.
+  - Added server-side validation in `app/routes/api.py` returning HTTP 400 with a clear message if an account is missing.
+- **Account & Wallet-to-Wallet Money Transfers:**
+  - Added transfer feature supporting all combinations: Account $\rightarrow$ Account, Account $\rightarrow$ Wallet, Wallet $\rightarrow$ Account, Wallet $\rightarrow$ Wallet.
+  - Integrated transfer options in the Accounts & Wallets section header and individual account cards.
+  - Atomic transfer execution debiting source and crediting destination within an isolated SQLite transaction.
+  - Strict validation preventing transfers between identical accounts, zero/negative transfers, or transfers exceeding available balance.
+- **Transfers in Transaction History & Dedicated Filter:**
+  - Added "Transfers" filter tab (`#tab-btn-transfer`) in the transaction history table.
+  - Contextual transfer display showing "Transfer In" vs "Transfer Out" when viewing an account, or "Source $\rightarrow$ Destination" in All Accounts view.
+  - Ledger isolation ensuring transfers do not pollute income or expense aggregations.
+- **Complete Custom GUI Transaction Editor Modal:**
+  - Replaced browser `prompt()` with a dedicated `#edit-tx-modal` custom GUI matching the application design system.
+  - Allows editing Amount, Description, Category, Account, Destination Account (for transfers), Date, and Necessity Classification (for expenses).
+  - Atomic reversal of previous balance impacts and re-application of updated amounts across accounts.
+- **Dedicated Test Suite:**
+  - Created `tests/test_money_and_transactions.py` with 8 comprehensive unit tests covering all transfer, validation, opening balance, and edit flows (totaling 65 passing tests).
+
+### Fixed
+- Fixed runtime `TypeError` in `FinancialService.update_transaction()` by supporting both `tx_id` and `transaction_id` keyword arguments.
+- Fixed Credit Card opening balance handling in `get_accounts()` and `get_ledger_totals()` to properly track initial liability balance.
+- Completely removed necessity classification radio buttons from the Add Income interface and creation flow while retaining it for expenses.
+- Fixed "+ New Account" button UI alignment, duplicate label, and added quick transfer actions.
+- Reviewed and polished all form placeholders in Add Income and Add Expense modals with contextual, user-friendly hints.
+
+---
+
 ## [0.8.1-beta] - 2026-11-08
 
 ## Release And Correction of Version History

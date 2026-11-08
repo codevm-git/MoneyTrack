@@ -288,7 +288,7 @@ def transfer_account_funds():
     to_acc_id = data.get('to_account_id') or data.get('toAccountId')
     amount = data.get('amount')
     date = data.get('date')
-    description = data.get('description')
+    description = data.get('description') or data.get('note')
     try:
         tx_id = fin_service.transfer_funds(profile_id, from_acc_id, to_acc_id, amount, date, description)
         return jsonify({'success': True, 'transaction_id': tx_id}), 201
@@ -321,11 +321,15 @@ def create_transaction():
     profile_id = get_current_profile_id()
     data = request.get_json() or {}
     try:
+        user_accounts = fin_service.get_accounts(profile_id)
+        if not user_accounts:
+            return jsonify({'error': 'Please create an Account or Wallet first before adding income or expenses.'}), 400
+
         date = data.get('date')
         description = data.get('description', '')
         category = data.get('category')
         tx_type = data.get('type', 'expense')
-        type_tag = data.get('typeTag', 'necessary')
+        type_tag = 'necessary' if tx_type == 'income' else (data.get('typeTag') or 'necessary')
         amount = data.get('amount')
         raw_acc_id = data.get('account_id') or data.get('accountId')
         account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
@@ -353,23 +357,28 @@ def update_transaction(tx_id):
         description = data.get('description')
         category = data.get('category')
         tx_type = data.get('type')
-        type_tag = data.get('typeTag')
+        type_tag = 'necessary' if tx_type == 'income' else data.get('typeTag')
         amount = data.get('amount')
         raw_acc_id = data.get('account_id') or data.get('accountId')
         account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
+        raw_dest_id = data.get('destination_account_id') or data.get('destinationAccountId')
+        destination_account_id = int(raw_dest_id) if raw_dest_id is not None and str(raw_dest_id).isdigit() else None
 
         fin_service.update_transaction(
             profile_id=profile_id,
-            tx_id=tx_id,
+            transaction_id=tx_id,
             date=date,
             description=description,
             category_name=category,
             tx_type=tx_type,
             type_tag=type_tag,
             amount=amount,
-            account_id=account_id
+            account_id=account_id,
+            destination_account_id=destination_account_id
         )
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

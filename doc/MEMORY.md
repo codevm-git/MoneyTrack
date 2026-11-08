@@ -5,8 +5,8 @@
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/MEMORY.md`  
-**Current Release Version:** `v0.8.1-beta` (Stable Target: `v1.0.0`)  
-**Test Suite Status:** 57/57 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.2-beta` (Stable Target: `v1.0.0`)  
+**Test Suite Status:** 65/65 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -108,13 +108,14 @@ flowchart LR
 ├── templates/
 │   ├── index.html               # Authoritative single-page application UI matching reference
 │   └── report.html              # Printer-ready & PDF exportable monthly statement
-├── tests/                       # Automated test suite (57 tests, 100% pass)
+├── tests/                       # Automated test suite (65 tests, 100% pass)
 │   ├── test_accounts.py
 │   ├── test_api.py
 │   ├── test_calculators.py
 │   ├── test_dashboard_analytics_and_alerts.py
 │   ├── test_e2e_workflows.py
 │   ├── test_financial_service.py
+│   ├── test_money_and_transactions.py
 │   ├── test_security_and_integrity.py
 │   └── test_username_auth.py
 ├── vendor/                      # Bundled offline Python package distribution (Flask, Jinja2, etc.)
@@ -175,9 +176,10 @@ flowchart LR
 ---
 
 ## 11. Current Development Stage & Milestones
-- **Current Version:** `v0.8.1-beta` Resolving the version numbering using git tag 
+- **Current Version:** `v0.8.2-beta`
 - **Core Architecture:** 100% Implemented (Flask backend, SQLite schema, Jinja2 views, REST APIs).
-- **Test Matrix:** 57/57 automated tests passing across 8 test suites.
+- **Test Matrix:** 65/65 automated tests passing across 9 test suites.
+- **Phase 7 Milestone Completed:** Account Transfers across all account types, atomic balance debit/credits, opening balance verification, custom transaction editing GUI modal, zero-account transaction guards, and bug fixes (`update_transaction` keyword args).
 - **Offline Packaging:** Vendored offline dependencies verified.
 
 ---

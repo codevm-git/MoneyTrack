@@ -196,8 +196,8 @@ class FinancialService:
                 tx_count = tx_cnt_row['cnt'] if tx_cnt_row else 0
 
                 if acc_type == 'credit_card':
-                    # For credit cards, balance is net liability (expenses charged minus payments/transfers to card)
-                    current_paise = (outflow_paise - inflow_paise) - tr_in_paise + tr_out_paise
+                    # For credit cards, balance is net liability (initial debt + expenses charged minus payments/transfers to card)
+                    current_paise = initial_paise + (outflow_paise - inflow_paise) - tr_in_paise + tr_out_paise
                 else:
                     current_paise = initial_paise + inflow_paise - outflow_paise + tr_in_paise - tr_out_paise
 
@@ -314,19 +314,35 @@ class FinancialService:
         if from_account_id == to_account_id:
             raise ValueError("Source and destination accounts must be different.")
         
-        amount_rupees = validate_amount(amount_rupees, "Transfer Amount", min_val=1.0)
+        amount_rupees = validate_amount(amount_rupees, "Transfer Amount", min_val=0.01)
         date = validate_date(date) if date else datetime.date.today().strftime('%Y-%m-%d')
         amount_paise = rupees_to_paise(amount_rupees)
+        if amount_paise <= 0:
+            raise ValueError("Transfer amount must be greater than zero.")
         
         conn = self._get_conn()
         try:
             with conn:
-                from_acc = conn.execute("SELECT name FROM accounts WHERE id = ? AND profile_id = ?;", (from_account_id, profile_id)).fetchone()
-                to_acc = conn.execute("SELECT name FROM accounts WHERE id = ? AND profile_id = ?;", (to_account_id, profile_id)).fetchone()
+                from_acc = conn.execute("SELECT id, name, account_type, initial_balance_paise FROM accounts WHERE id = ? AND profile_id = ?;", (from_account_id, profile_id)).fetchone()
+                to_acc = conn.execute("SELECT id, name, account_type, initial_balance_paise FROM accounts WHERE id = ? AND profile_id = ?;", (to_account_id, profile_id)).fetchone()
                 if not from_acc or not to_acc:
                     raise ValueError("One or both selected accounts do not exist.")
                 
-                desc = sanitize_text(description or f"Transfer: {from_acc['name']} -> {to_acc['name']}", "Description", 1, 250)
+                # Check available source balance if source account is an asset account
+                if from_acc['account_type'] != 'credit_card':
+                    init_p = from_acc['initial_balance_paise'] or 0
+                    inc = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'income';", (profile_id, from_account_id)).fetchone()['s'] or 0
+                    exp = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'expense';", (profile_id, from_account_id)).fetchone()['s'] or 0
+                    tr_in = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND destination_account_id = ? AND type = 'transfer';", (profile_id, from_account_id)).fetchone()['s'] or 0
+                    tr_out = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'transfer';", (profile_id, from_account_id)).fetchone()['s'] or 0
+                    
+                    available_paise = init_p + inc - exp + tr_in - tr_out
+                    if amount_paise > available_paise:
+                        avail_rupees = paise_to_rupees(available_paise)
+                        req_rupees = paise_to_rupees(amount_paise)
+                        raise ValueError(f"Insufficient funds in '{from_acc['name']}'. Available balance: ₹{avail_rupees:,.2f}, Requested: ₹{req_rupees:,.2f}.")
+                
+                desc = sanitize_text(description or f"Transfer: {from_acc['name']} \u2192 {to_acc['name']}", "Description", 1, 250)
                 
                 cat = conn.execute("SELECT id FROM categories WHERE name = 'Transfer' COLLATE NOCASE;").fetchone()
                 if cat:
@@ -399,7 +415,7 @@ class FinancialService:
                 all_tr_out = (conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'transfer';", (profile_id, aid)).fetchone()['s'] or 0)
 
                 if atype == 'credit_card':
-                    current_paise = (all_exp - all_inc) - all_tr_in + all_tr_out
+                    current_paise = init_paise + (all_exp - all_inc) - all_tr_in + all_tr_out
                 else:
                     current_paise = init_paise + all_inc - all_exp + all_tr_in - all_tr_out
 
@@ -553,6 +569,10 @@ class FinancialService:
                     'account_id': str(r['account_id']) if r['account_id'] else None,
                     'destination_account_id': str(r['destination_account_id']) if r['destination_account_id'] else None,
                     'account_name': acc_name,
+                    'source_account_name': r['account_name'] or 'Account',
+                    'dest_name': r['dest_name'],
+                    'dest_account_name': r['dest_name'],
+                    'dest_type': r['dest_type'] or 'savings',
                     'account_type': r['account_type'] or 'savings',
                     'type': r['type'],
                     'typeTag': r['type_tag'],
@@ -575,7 +595,9 @@ class FinancialService:
         
         if tx_type not in ('income', 'expense', 'transfer'):
             raise ValueError(f"Invalid transaction type: {tx_type}")
-        if type_tag not in ('necessary', 'optional', 'savings', 'debt'):
+        if tx_type == 'income':
+            type_tag = 'necessary'
+        elif type_tag not in ('necessary', 'optional', 'savings', 'debt'):
             type_tag = 'necessary'
 
         conn = self._get_conn()
@@ -586,7 +608,13 @@ class FinancialService:
                     def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? AND is_default = 1;", (profile_id,)).fetchone()
                     if not def_acc:
                         def_acc = conn.execute("SELECT id FROM accounts WHERE profile_id = ? ORDER BY id ASC LIMIT 1;", (profile_id,)).fetchone()
-                    account_id = def_acc['id'] if def_acc else None
+                    if not def_acc:
+                        raise ValueError("Please create an Account or Wallet first before adding transactions.")
+                    account_id = def_acc['id']
+                else:
+                    acc_check = conn.execute("SELECT id FROM accounts WHERE id = ? AND profile_id = ?;", (account_id, profile_id)).fetchone()
+                    if not acc_check:
+                        raise ValueError("The selected account does not exist or does not belong to your profile.")
 
                 # Find category ID
                 if isinstance(category_name_or_id, int) or (isinstance(category_name_or_id, str) and str(category_name_or_id).isdigit()):
@@ -628,7 +656,11 @@ class FinancialService:
         finally:
             conn.close()
 
-    def update_transaction(self, profile_id, transaction_id, date=None, description=None, category_name_or_id=None, tx_type=None, type_tag=None, amount_rupees=None, account_id=None, amount=None, category=None, category_name=None):
+    def update_transaction(self, profile_id, transaction_id=None, date=None, description=None, category_name_or_id=None, tx_type=None, type_tag=None, amount_rupees=None, account_id=None, destination_account_id=None, amount=None, category=None, category_name=None, tx_id=None):
+        if transaction_id is None and tx_id is not None:
+            transaction_id = tx_id
+        if transaction_id is None:
+            raise ValueError("Transaction ID is required.")
         if amount_rupees is None and amount is not None:
             amount_rupees = amount
         if category_name_or_id is None:
@@ -643,14 +675,53 @@ class FinancialService:
                 new_date = validate_date(date) if date else existing['date']
                 new_desc = sanitize_text(description, "Description", 1, 250) if description else existing['description']
                 new_type = tx_type if tx_type in ('income', 'expense', 'transfer') else existing['type']
-                new_tag = type_tag if type_tag in ('necessary', 'optional', 'savings', 'debt') else existing['type_tag']
+
+                if new_type == 'income':
+                    new_tag = 'necessary'
+                elif type_tag in ('necessary', 'optional', 'savings', 'debt'):
+                    new_tag = type_tag
+                else:
+                    new_tag = existing['type_tag']
+
                 new_acc_id = account_id if account_id is not None else existing['account_id']
+                new_dest_id = destination_account_id if destination_account_id is not None else existing['destination_account_id']
+
+                # Account association verification
+                if new_type in ('income', 'expense'):
+                    if not new_acc_id:
+                        raise ValueError("An account or wallet must be associated with the transaction.")
+                    acc = conn.execute("SELECT id FROM accounts WHERE id = ? AND profile_id = ?;", (new_acc_id, profile_id)).fetchone()
+                    if not acc:
+                        raise ValueError("Selected account does not exist.")
+                    new_dest_id = None
+                elif new_type == 'transfer':
+                    if not new_acc_id or not new_dest_id:
+                        raise ValueError("Source and destination accounts are required for transfers.")
+                    if int(new_acc_id) == int(new_dest_id):
+                        raise ValueError("Source and destination accounts must be different.")
+                    from_acc = conn.execute("SELECT id, name, account_type, initial_balance_paise FROM accounts WHERE id = ? AND profile_id = ?;", (new_acc_id, profile_id)).fetchone()
+                    to_acc = conn.execute("SELECT id, name FROM accounts WHERE id = ? AND profile_id = ?;", (new_dest_id, profile_id)).fetchone()
+                    if not from_acc or not to_acc:
+                        raise ValueError("One or both selected transfer accounts do not exist.")
 
                 if amount_rupees is not None:
-                    amount_rupees = validate_amount(amount_rupees, "Amount")
+                    amount_rupees = validate_amount(amount_rupees, "Amount", min_val=0.01)
                     new_amount_paise = rupees_to_paise(amount_rupees)
                 else:
                     new_amount_paise = existing['amount_paise']
+
+                if new_type == 'transfer' and from_acc['account_type'] != 'credit_card':
+                    # Calculate available balance excluding old transfer amount if from same account
+                    init_p = from_acc['initial_balance_paise'] or 0
+                    inc = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'income';", (profile_id, new_acc_id)).fetchone()['s'] or 0
+                    exp = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'expense';", (profile_id, new_acc_id)).fetchone()['s'] or 0
+                    tr_in = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND destination_account_id = ? AND type = 'transfer';", (profile_id, new_acc_id)).fetchone()['s'] or 0
+                    tr_out = conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND account_id = ? AND type = 'transfer' AND id != ?;", (profile_id, new_acc_id, transaction_id)).fetchone()['s'] or 0
+                    available_paise = init_p + inc - exp + tr_in - tr_out
+                    if new_amount_paise > available_paise:
+                        avail_rupees = paise_to_rupees(available_paise)
+                        req_rupees = paise_to_rupees(new_amount_paise)
+                        raise ValueError(f"Insufficient funds in '{from_acc['name']}'. Available balance: ₹{avail_rupees:,.2f}, Requested: ₹{req_rupees:,.2f}.")
 
                 if category_name_or_id:
                     if isinstance(category_name_or_id, int) or (isinstance(category_name_or_id, str) and str(category_name_or_id).isdigit()):
@@ -668,9 +739,9 @@ class FinancialService:
 
                 conn.execute("""
                     UPDATE transactions
-                    SET date = ?, description = ?, category_id = ?, type = ?, type_tag = ?, amount_paise = ?, account_id = ?
+                    SET date = ?, description = ?, category_id = ?, type = ?, type_tag = ?, amount_paise = ?, account_id = ?, destination_account_id = ?
                     WHERE id = ? AND profile_id = ?;
-                """, (new_date, new_desc, cat_id, new_type, new_tag, new_amount_paise, new_acc_id, transaction_id, profile_id))
+                """, (new_date, new_desc, cat_id, new_type, new_tag, new_amount_paise, new_acc_id, new_dest_id, transaction_id, profile_id))
             return True
         finally:
             conn.close()

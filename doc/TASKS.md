@@ -6,7 +6,7 @@
 **Core Requirement:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/TASKS.md`  
 **Current Release Version:** `v0.8.1-beta` 
-**Test Suite Status:** 57/57 Tests Passing (`python3 -m unittest discover -s tests`)  
+**Test Suite Status:** 65/65 Tests Passing (`python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -37,8 +37,10 @@ gantt
     section Phase 6: Dashboard & Alerts
     Account-Wise Analytics & Budgets    :done, p6_1, 2026-11-01, 2026-11-08
     Diagnostics & Notifications         :done, p6_2, 2026-11-01, 2026-11-08
+    section Phase 7: Money & Transactions
+    Transfers, Balances & Edit GUI      :done, p7_1, 2026-11-08, 2026-11-08
     section Future Roadmap
-    Standalone OS Binaries (PyInstaller):p7_1, 2026-11-15, 14d
+    Standalone OS Binaries (PyInstaller):p8_1, 2026-11-15, 14d
 ```
 
 ### Milestone Progress Summary
@@ -52,6 +54,7 @@ gantt
 | **Phase 4** | Financial Calculators & Intelligence | **Completed (100%)** | Reducing-balance EMI, CI, Inflation, Affordability Evaluator, Health Score (0–100). |
 | **Phase 5** | Authentication, Settings & Air-Gap | **Completed (100%)** | Multi-profile username authentication, password hashing, local vendor bundling. |
 | **Phase 6** | Dashboard Analytics, Budget Limits, Alerts & Diagnostics | **Completed (100%)** | Account-wise filtering, Budget Manager Modal, Dynamic Insights, 5-point Diagnostics, Toast Stack. |
+| **Phase 7** | Money & Transactions Management | **Completed (100%)** | Account creation guard, wallet-to-wallet transfers, opening balance accuracy, custom transaction edit GUI, 65/65 tests passing. |
 | **Backlog** | Standalone Desktop Packaging | **Planned** | Standalone PyInstaller / AppImage distribution. |
 
 ---
@@ -276,13 +279,48 @@ gantt
 
 ---
 
-## Phase 7 — Future Packaging & Distribution (Planned)
+## Phase 7 — Money & Transactions: Account Transfers, Opening Balance & Complete Transaction Management (Completed)
 
-- [ ] **TASK-701: PyInstaller Standalone Windows Executable**
+- [x] **TASK-701: Account & Wallet Creation Requirement for Income & Expense**
+  - **Description:** Enforces that users must have at least one account/wallet before adding income or expenses. Disables/warns in UI via `#account-required-modal` and `#tx-no-account-warning`, and rejects unassociated transaction creation at API level (HTTP 400).
+  - **Verification:** Verified in `app/routes/api.py`, `static/js/app.js`, `templates/index.html`, and `tests/test_money_and_transactions.py`.
+- [x] **TASK-702: Account & Wallet-to-Wallet Money Transfers**
+  - **Description:** Direct fund transfers across all account/wallet pairs (Account↔Account, Account↔Wallet, Wallet↔Wallet). Validates source != destination, amount > 0, source balance sufficiency, executes atomically within SQLite transaction, and immediately updates balances.
+  - **Verification:** Verified in `FinancialService.transfer_funds()`, `app/routes/api.py`, `static/js/app.js`, and `tests/test_money_and_transactions.py`.
+- [x] **TASK-703: Display Transfers in Transaction History & Dedicated Filter Tab**
+  - **Description:** Distinguishable display of transfers in transaction history table with Source $\rightarrow$ Destination routing, Transfer In vs Transfer Out context based on active account filter, dedicated "Transfers" filter tab, and exclusion of transfers from regular income/expense aggregations.
+  - **Verification:** Verified in `FinancialService.get_transactions()`, `FinancialService.get_ledger_totals()`, `templates/index.html`, and `static/js/app.js`.
+- [x] **TASK-704: Opening Balance Mathematical Consistency & Liability Tracking**
+  - **Description:** Mathematical audit of opening balances (`initial_balance_paise`). Verified that initial balances reflect immediately upon creation, are not treated as fees or regular income, are not double-counted, and correctly integrate with Credit Card liabilities (`initial_paise + (charges - payments)`).
+  - **Verification:** Verified in `FinancialService.get_accounts()`, `FinancialService.get_ledger_totals()`, and `tests/test_money_and_transactions.py`.
+- [x] **TASK-705: Fix `FinancialService.update_transaction()` Argument Mismatch**
+  - **Description:** Resolved runtime `TypeError: FinancialService.update_transaction() got an unexpected keyword argument 'tx_id'` by aligning function signatures across `api.py` and `financial_service.py` to seamlessly accept `tx_id` and `transaction_id`.
+  - **Verification:** Verified in `FinancialService.update_transaction()` and `tests/test_money_and_transactions.py`.
+- [x] **TASK-706: Remove Necessity Classification from Add Income Flow**
+  - **Description:** Removed necessity classification radio buttons from Add Income modal while cleanly preserving necessity classification for Add Expense. Server-side automatically defaults income transactions to `'necessary'` tag.
+  - **Verification:** Verified in `templates/index.html`, `static/js/app.js`, `app/routes/api.py`, and `tests/test_money_and_transactions.py`.
+- [x] **TASK-707: Enhanced "+ New Account" Button UI & Quick Transfer Triggers**
+  - **Description:** Cleaned up "+ New Account" button styling, removed duplicate "+ +" labels, added dedicated Transfer and New Account action buttons in the Accounts & Wallets section header, and added per-account quick transfer action shortcuts.
+  - **Verification:** Verified in `templates/index.html` and `static/js/app.js`.
+- [x] **TASK-708: Context-Aware Form Placeholders for Income and Expense**
+  - **Description:** Dynamic, context-sensitive form placeholders tailored specifically for Income (e.g., Salary, Freelance project) versus Expense (e.g., Grocery shopping, Electricity bill) with appropriate category and amount hints.
+  - **Verification:** Verified in `static/js/app.js` (`openAddTransactionModal`).
+- [x] **TASK-709: Complete Custom GUI Transaction Editor Modal**
+  - **Description:** Custom modal GUI (`#edit-tx-modal`) allowing users to edit every transaction field (Amount, Description, Category, Account, Destination Account for transfers, Date, and Expense Necessity tag). Atomically reverses old balance impacts and applies new updates without browser native prompts.
+  - **Verification:** Verified in `templates/index.html`, `static/js/app.js`, `FinancialService.update_transaction()`, and `tests/test_money_and_transactions.py`.
+- [x] **TASK-710: Dedicated Money & Transactions Automated Test Suite (65/65 Tests Passing)**
+  - **Description:** Implemented comprehensive automated test suite `tests/test_money_and_transactions.py` covering all 8 core feature areas, achieving 65/65 passing tests across the entire codebase.
+  - **Verification:** Verified via `python3 -m unittest discover -s tests`.
+
+---
+
+## Phase 8 — Future Packaging & Distribution (Planned)
+
+- [ ] **TASK-801: PyInstaller Standalone Windows Executable**
   - **Description:** Package MoneyTrack as a single-file portable `.exe` bundle for offline Windows execution.
   - **Priority:** Medium
   - **Dependencies:** None (App is fully functional via `python run.py`).
-- [ ] **TASK-702: Linux AppImage / Debian Package**
+- [ ] **TASK-802: Linux AppImage / Debian Package**
   - **Description:** Package MoneyTrack with desktop launcher integration for Linux workstations.
   - **Priority:** Medium
   - **Dependencies:** None.
