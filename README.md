@@ -217,7 +217,7 @@ The accounting engine was verified against the reference test dataset:
 
 ## 9. MoneyTrack – Bug Fixes and Improvements
 
-Fixed several issues in MoneyTrack, including real-time greeting updates, loading screens, financial alerts, and data management.
+Fixed several issues in MoneyTrack, including real-time greeting updates, loading screens, financial alerts,  and data management.
 - Improved the dashboard greeting to display according to the current time.
 - Added loading screens and lazy loading for smoother page loading.
 - Removed all existing user accounts and dummy data for a fresh start.
