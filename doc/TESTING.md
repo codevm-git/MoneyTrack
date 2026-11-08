@@ -6,8 +6,8 @@
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/TESTING.md`  
-**Current Release Version:** `v0.2.1-beta` (Git Commit: `c37a834`, Target: `v1.0.0 Stable`)  
-**Verified Test Execution:** 50/50 Tests Passing (`python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.1-beta` 
+**Verified Test Execution:** 57/57 Tests Passing (`python3 -m unittest discover -s tests`)  
 
 ---
 

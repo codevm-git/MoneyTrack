@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.1-beta] - 2026-10-31
+## [0.8.1-beta] - 2026-11-08
+
+## Release And Correction of Version History
+
+- Resolved with developing version history numbering 
+- Getting ready for 0.9.0-rc.1 phase 
+
+## [0.2.2-beta] - 2026-11-08
+
+### Added
+- **Account-Wise & Wallet-Wise Dashboard Analytics:**
+  - Individual financial data generation for every existing account and wallet (Total Income, Total Expenses, Current Balance, Inflows, Outflows, Net Savings).
+  - Clear visual identification of Primary Account/Wallet (`PRIMARY` badge).
+  - Interactive Account Switcher pills and All Accounts & Wallets Summary Grid.
+  - Dedicated account-wise Financial Health Scores and category spending distributions.
+- **Dedicated Category Budget Limits Manager Modal (`#budget-manager-modal`):**
+  - Full creation, updating, and deletion of category budget limits.
+  - Calculation and display of Budget Limit, Amount Spent, Remaining Budget, and Spending Percentage Progress based on actual transaction records.
+  - Real-time updates when transactions or budget limits are modified.
+- **Dynamic Spending Insights Engine:**
+  - Natural English month-over-month comparisons (e.g. comparing current month vs previous month).
+  - Dynamic detection of top spending categories, spending surges/drops, and unusual large purchases without static or dummy strings.
+- **Real-Time Financial Alerts & Warning System:**
+  - Real database evaluation for exceeded budgets (>100%), budgets at capacity (100%), budget threshold warnings (>=85%), overdrawn and low-balance accounts, credit card payments due, and scheduled calendar bills within 7 days.
+  - Deduplication of alerts and user dismissal controls.
+- **Live System Diagnostics Engine & Modal:**
+  - 5-point data integrity check evaluating ledger math consistency, transaction/category foreign key references, budget calculation health, primary account configuration, and SQLite WAL/FK PRAGMA engine integrity.
+- **Real-Time Notification Popups & Tab Background Behavior:**
+  - Customized toast popup cards with status colors (Success, Warning, Danger/Error, Info/Diagnostics).
+  - Browser Web Notification API support alerting users even when switching tabs or running in the background.
+  - Automatic `document.title` indicator when alerts occur while the tab is hidden, resetting upon tab return.
+- **Dedicated Automated Test Suite:**
+  - Created `tests/test_dashboard_analytics_and_alerts.py` containing 7 comprehensive unit tests (all 57 tests passing in test suite).
+
+### Fixed
+- Fixed Category Budget Limits "Manage" button navigation, now opening the dedicated Category Budget Manager rather than navigating to Money & Transactions.
+- Fixed overflowing and overlapping text labels in Category Spending Breakdown donut chart by moving category labels cleanly below the chart with word-wrapping.
 
 ### Added
 - **Monthly Financial Statement Report (`/report/monthly`):** Printer-ready and PDF-exportable comprehensive statement showing net worth, total assets, total liabilities, category breakdowns, budgets, goals, and complete ledger records.

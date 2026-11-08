@@ -4,7 +4,7 @@
  */
 const APP_CONFIG = {
   name: "MoneyTrack",
-  version: "0.1.9",
+  version: "0.8.1",
   stage: "Beta"
 };
 
@@ -80,7 +80,14 @@ const MoneyTrackApp = {
     achievements: [],
     lessons: [],
     activeQuiz: null,
-    quizState: { lessonId: null, currentQ: 0, score: 0, questions: [] }
+    quizState: { lessonId: null, currentQ: 0, score: 0, questions: [] },
+    selectedDashboardAccountId: null,
+    accountSummaries: [],
+    activeDashboardData: null,
+    diagnosticsData: null,
+    alertsData: [],
+    dismissedAlertIds: new Set(),
+    activeNotifTab: 'alerts'
   },
 
   renderAppVersionInfo: function() {
@@ -102,31 +109,49 @@ const MoneyTrackApp = {
   },
 
   init: function() {
-    // Intercept fetch to automatically append active profile ID
-    const originalFetch = window.fetch;
-    const appSelf = this;
-    window.fetch = function(url, options = {}) {
-      if (typeof url === 'string' && url.startsWith('/api/')) {
-        options = options || {};
-        options.headers = options.headers || {};
-        if (options.headers instanceof Headers) {
-          if (appSelf.currentUserProfileId) {
-            options.headers.set('X-Profile-ID', String(appSelf.currentUserProfileId));
-          }
-        } else {
-          if (appSelf.currentUserProfileId) {
-            options.headers['X-Profile-ID'] = String(appSelf.currentUserProfileId);
+    try {
+      // Safety fallback: ensure startup loader is dismissed even under slow resource load
+      setTimeout(() => {
+        this.hideStartupLoader();
+      }, 3000);
+
+      // Intercept fetch to automatically append active profile ID
+      const originalFetch = window.fetch;
+      const appSelf = this;
+      window.fetch = function(url, options = {}) {
+        if (typeof url === 'string' && url.startsWith('/api/')) {
+          options = options || {};
+          options.headers = options.headers || {};
+          if (options.headers instanceof Headers) {
+            if (appSelf.currentUserProfileId) {
+              options.headers.set('X-Profile-ID', String(appSelf.currentUserProfileId));
+            }
+          } else {
+            if (appSelf.currentUserProfileId) {
+              options.headers['X-Profile-ID'] = String(appSelf.currentUserProfileId);
+            }
           }
         }
-      }
-      return originalFetch(url, options);
-    };
+        return originalFetch(url, options);
+      };
 
-    this.renderAppVersionInfo();
-    this.initTheme();
-    this.initCalculators();
-    this.initChart();
-    this.checkAuthState();
+      this.renderAppVersionInfo();
+      this.initTheme();
+      this.initCalculators();
+      this.initChart();
+
+      // Tab visibility handling for real-time background notifications
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          document.title = 'MoneyTrack - Smart Financial Literacy and Budget Planner for Public';
+        }
+      });
+
+      this.checkAuthState();
+    } catch (err) {
+      console.error("Critical error during MoneyTrackApp.init:", err);
+      this.hideStartupLoader();
+    }
   },
 
   // --- Authentication & User Session Management ---
@@ -623,8 +648,12 @@ const MoneyTrackApp = {
   // Refresh data from SQLite API
   refreshAllData: function() {
     this.showInAppLoader();
+    const dashUrl = this.state.selectedDashboardAccountId
+      ? `/api/dashboard?account_id=${this.state.selectedDashboardAccountId}`
+      : '/api/dashboard';
+
     Promise.all([
-      fetch('/api/dashboard').then(r => r.json()),
+      fetch(dashUrl).then(r => r.json()),
       fetch('/api/transactions').then(r => r.json()),
       fetch('/api/accounts').then(r => r.json()),
       fetch('/api/goals').then(r => r.json()),
@@ -640,6 +669,14 @@ const MoneyTrackApp = {
       this.state.calendarEvents = calData.events;
       this.state.lessons = lessData.lessons;
       this.state.achievements = achData.achievements;
+      this.state.accountSummaries = dashData.account_summaries || [];
+      this.state.activeDashboardData = dashData;
+      this.state.diagnosticsData = dashData.diagnostics || null;
+      this.state.alertsData = dashData.alerts || [];
+
+      if (!this.state.selectedDashboardAccountId && dashData.selected_account_id) {
+        this.state.selectedDashboardAccountId = String(dashData.selected_account_id);
+      }
 
       this.renderHeaderAndUser();
       this.renderDashboard(dashData);
@@ -651,10 +688,33 @@ const MoneyTrackApp = {
       this.renderAchievements();
       this.renderAppVersionInfo();
       this.hideInAppLoader();
+
+      // Check for any unnotified critical alerts and trigger notifications
+      this.checkAndTriggerAlertNotifications(dashData.alerts);
     }).catch(err => {
       console.error("Error refreshing data:", err);
       this.hideInAppLoader();
     });
+  },
+
+  selectDashboardAccount: function(accountId) {
+    this.state.selectedDashboardAccountId = String(accountId);
+    this.showInAppLoader();
+    fetch(`/api/dashboard?account_id=${accountId}`)
+      .then(r => r.json())
+      .then(dashData => {
+        this.state.activeDashboardData = dashData;
+        this.renderDashboard(dashData);
+        this.hideInAppLoader();
+        const acc = (dashData.account_summaries || []).find(a => String(a.id) === String(accountId));
+        if (acc) {
+          this.showToast('Account View Switched', `Now viewing analytics for ${acc.name}.`, 'info', 2500);
+        }
+      })
+      .catch(err => {
+        console.error("Error switching account:", err);
+        this.hideInAppLoader();
+      });
   },
 
   renderHeaderAndUser: function() {
@@ -679,6 +739,105 @@ const MoneyTrackApp = {
   },
 
   renderDashboard: function(data) {
+    const selectedAid = String(data.selected_account_id || this.state.selectedDashboardAccountId || '');
+
+    // 1. Render Account Switcher Pills
+    const pillsContainer = document.getElementById('dash-account-selector-pills');
+    if (pillsContainer) {
+      pillsContainer.innerHTML = '';
+      (data.account_summaries || []).forEach(acc => {
+        const isSelected = String(acc.id) === selectedAid;
+        const activeClass = isSelected
+          ? 'bg-brand-600 text-white shadow-sm'
+          : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-brand-500';
+        const primaryTag = acc.is_primary ? `<span class="ml-1 px-1.5 py-0.5 text-[9px] rounded font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-brand-50 dark:bg-brand-900/40 text-brand-600'}">PRIMARY</span>` : '';
+        pillsContainer.innerHTML += `
+          <button onclick="MoneyTrackApp.selectDashboardAccount('${acc.id}')" class="px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center space-x-1.5 ${activeClass}">
+            <span>${this.escapeHtml(acc.name)}</span>
+            ${primaryTag}
+          </button>
+        `;
+      });
+    }
+
+    // 2. Render All Accounts & Wallets Separate Financial Summaries Grid
+    const summaryGrid = document.getElementById('dash-accounts-summary-grid');
+    if (summaryGrid) {
+      summaryGrid.innerHTML = '';
+      const typeIcons = {
+        'savings': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 3l9 5H3l9-5z"/></svg>',
+        'current': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6z"/></svg>',
+        'cash': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>',
+        'credit_card': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+        'wallet': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><path d="M20 7h-7m-4 0H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 13h.01"/></svg>',
+        'investment': '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>'
+      };
+
+      (data.account_summaries || []).forEach(acc => {
+        const isSelected = String(acc.id) === selectedAid;
+        const icon = typeIcons[acc.account_type] || typeIcons['savings'];
+        const isCredit = acc.account_type === 'credit_card';
+        const balLabel = isCredit ? (acc.current_balance > 0 ? 'Outstanding Due' : 'Paid in Full') : (acc.current_balance < 0 ? 'Overdrawn' : 'Available Balance');
+        const balColor = isCredit ? (acc.current_balance > 0 ? 'text-accent-rose' : 'text-brand-600') : (acc.current_balance < 0 ? 'text-accent-rose' : 'text-slate-900 dark:text-white');
+        const borderClass = isSelected ? 'ring-2 ring-brand-500 border-brand-500 bg-brand-50/20 dark:bg-brand-950/20' : 'border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-gray-300 dark:hover:border-slate-700';
+
+        const primaryBadge = acc.is_primary ? `
+          <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300 border border-brand-200 dark:border-brand-800">PRIMARY</span>
+        ` : '';
+
+        summaryGrid.innerHTML += `
+          <div onclick="MoneyTrackApp.selectDashboardAccount('${acc.id}')" class="p-4 rounded-2xl border ${borderClass} transition cursor-pointer shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="p-1.5 rounded-lg text-white" style="background-color: ${acc.color}">${icon}</span>
+                <div>
+                  <div class="text-xs font-bold text-slate-900 dark:text-white">${this.escapeHtml(acc.name)}</div>
+                  <div class="text-[10px] text-slate-400 capitalize">${acc.type_label}</div>
+                </div>
+              </div>
+              <div class="flex items-center space-x-1">
+                ${primaryBadge}
+                ${isSelected ? '<span class="w-2 h-2 rounded-full bg-brand-500 inline-block" title="Active"></span>' : ''}
+              </div>
+            </div>
+
+            <div class="pt-1">
+              <div class="text-lg font-black ${balColor}">${this.state.user.currency}${Math.abs(acc.current_balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div class="text-[10px] font-medium text-slate-400">${balLabel}</div>
+            </div>
+
+            <div class="pt-2 border-t border-gray-100 dark:border-slate-800/80 grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <span class="text-slate-400">Total Inflow:</span>
+                <span class="font-bold text-brand-600 block">${this.state.user.currency}${acc.income.toLocaleString()}</span>
+              </div>
+              <div>
+                <span class="text-slate-400">Total Outflow:</span>
+                <span class="font-bold text-accent-rose block">${this.state.user.currency}${acc.expenses.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+              <span>Health: <strong class="text-slate-800 dark:text-slate-200">${acc.health_score}/100</strong></span>
+              <span class="text-brand-600 dark:text-brand-400 font-semibold">${isSelected ? 'Active View' : 'Select \u2192'}</span>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // Active Account Context Header
+    const activeAcc = (data.account_summaries || []).find(a => String(a.id) === selectedAid);
+    const activeBadge = document.getElementById('dash-active-account-badge');
+    const subtitleEl = document.getElementById('dash-account-subtitle');
+    if (activeAcc && activeBadge) {
+      activeBadge.textContent = `${activeAcc.name} ${activeAcc.is_primary ? '(Primary)' : ''}`;
+    }
+    if (activeAcc && subtitleEl) {
+      subtitleEl.textContent = `Viewing separate financial data, health score (${activeAcc.health_score}/100), and budget limits for ${activeAcc.name}.`;
+    }
+
+    // 3. Render 4 Primary Metric Cards
     const totals = data.totals;
     document.getElementById('dash-income-val').textContent = totals.income.toLocaleString();
     document.getElementById('dash-expense-val').textContent = totals.expenses.toLocaleString();
@@ -691,7 +850,14 @@ const MoneyTrackApp = {
       savRateEl.textContent = totals.savings_rate;
     }
 
-    // Render Financial Health
+    // Contextual metric subtexts
+    const isCredit = activeAcc && activeAcc.account_type === 'credit_card';
+    const balLabel = document.getElementById('dash-balance-label');
+    const balSubtext = document.getElementById('dash-balance-subtext');
+    if (balLabel) balLabel.textContent = isCredit ? 'Outstanding Due' : 'Current Balance';
+    if (balSubtext) balSubtext.textContent = isCredit ? (netBalance > 0 ? 'Card balance due' : 'Paid in full') : (netBalance < 0 ? 'Account overdrawn' : 'Available buffer');
+
+    // 4. Render Financial Health
     const health = data.health;
     const scoreNum = document.getElementById('health-score-num');
     if (scoreNum) scoreNum.textContent = health.score;
@@ -715,17 +881,23 @@ const MoneyTrackApp = {
     document.getElementById('health-emg-res').textContent = health.emergency_reserve;
     document.getElementById('health-emg-bar').style.width = `${health.emergency_bar_pct}%`;
 
-    // Render Category Spending Breakdown & Donut Chart
+    // 5. Render Category Spending Breakdown & Donut Chart
     const donutSvg = document.getElementById('dashboard-donut-svg');
     const legendContainer = document.getElementById('dashboard-spending-legend');
     const topCatLbl = document.getElementById('donut-top-category-lbl');
+    const centerTotalEl = document.getElementById('donut-center-total');
+    const catSpendings = data.category_spending || [];
+    const totalSpent = catSpendings.reduce((sum, c) => sum + (c.spent || 0), 0);
+
+    if (centerTotalEl) {
+      centerTotalEl.innerHTML = `<span class="currency-symbol">${this.state.user.currency}</span>${totalSpent.toLocaleString()}`;
+    }
 
     if (legendContainer) {
       legendContainer.innerHTML = '';
-      const catSpendings = data.category_spending || [];
 
       if (catSpendings.length === 0) {
-        legendContainer.innerHTML = '<div class="text-xs text-slate-400 py-2">No expenses recorded yet.</div>';
+        legendContainer.innerHTML = '<div class="text-xs text-slate-400 py-2">No expenses recorded for this account yet.</div>';
         if (topCatLbl) topCatLbl.textContent = 'None (0%)';
         if (donutSvg) {
           donutSvg.innerHTML = '<path class="text-gray-100 dark:text-slate-800" stroke-width="3.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />';
@@ -748,13 +920,13 @@ const MoneyTrackApp = {
           donutSvg.innerHTML = svgHtml;
         }
 
-        // Legend Rendering with Truncation (Safety against text overflow)
+        // Legend Rendering with clean wrapping
         catSpendings.forEach(cat => {
           legendContainer.innerHTML += `
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-2 min-w-0">
+            <div class="flex items-center justify-between py-1">
+              <div class="flex items-center space-x-2 min-w-0 flex-1 mr-2">
                 <span class="w-3 h-3 rounded-full shrink-0 inline-block" style="background-color: ${cat.color}"></span>
-                <span class="text-slate-600 dark:text-slate-300 font-medium truncate max-w-[130px]">${cat.name}</span>
+                <span class="text-slate-700 dark:text-slate-200 font-medium break-words text-xs">${this.escapeHtml(cat.name)} <span class="text-slate-400 font-normal">(${Math.round(cat.percentage)}%)</span></span>
               </div>
               <span class="font-bold text-slate-900 dark:text-white shrink-0">${this.state.user.currency}${cat.spent.toLocaleString()}</span>
             </div>
@@ -763,34 +935,53 @@ const MoneyTrackApp = {
       }
     }
 
-    // Render Budgets Overview
-    const budgetContainer = document.getElementById('budget-items-list');
-    budgetContainer.innerHTML = '';
-    data.budgets.forEach(b => {
-      budgetContainer.innerHTML += `
-        <div class="space-y-1.5 text-xs">
-          <div class="flex justify-between items-center font-semibold">
-            <span class="text-slate-800 dark:text-slate-200">${b.name}</span>
-            <div class="flex items-center space-x-2">
-              <span class="text-slate-500">${this.state.user.currency}${b.spent.toLocaleString()} / ${this.state.user.currency}${b.limit.toLocaleString()}</span>
-              <button onclick="MoneyTrackApp.promptSetBudget('${b.name}', ${b.limit})" class="text-[10px] text-slate-400 hover:text-brand-600 transition" title="Adjust Budget">
-                <svg class="w-3.5 h-3.5 inline stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              </button>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.badge_color}">${b.status}</span>
-            </div>
-          </div>
-          <div class="w-full bg-gray-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-            <div class="${b.bar_color} h-full transition-all duration-500" style="width: ${b.pct}%"></div>
-          </div>
-        </div>
-      `;
-    });
+    // 6. Dynamic Spending Insights Box
+    const insightEl = document.getElementById('dashboard-spending-insight-text');
+    if (insightEl) {
+      insightEl.textContent = data.spending_insight || "Analyzing actual monthly spending trends...";
+    }
 
-    // Render Alerts
+    // 7. Render Budgets Overview
+    const budgetContainer = document.getElementById('budget-items-list');
+    if (budgetContainer) {
+      budgetContainer.innerHTML = '';
+      if (!data.budgets || data.budgets.length === 0) {
+        budgetContainer.innerHTML = `
+          <div class="p-4 rounded-xl border border-dashed border-gray-200 dark:border-slate-800 text-center text-xs text-slate-400">
+            No category budgets set for this month. Click "Manage" to configure budget limits.
+          </div>
+        `;
+      } else {
+        data.budgets.forEach(b => {
+          const rem = b.remaining !== undefined ? b.remaining : Math.max(0, b.limit - b.spent);
+          budgetContainer.innerHTML += `
+            <div class="space-y-1.5 text-xs">
+              <div class="flex justify-between items-center font-semibold">
+                <span class="text-slate-800 dark:text-slate-200">${this.escapeHtml(b.name)}</span>
+                <div class="flex items-center space-x-2">
+                  <span class="text-slate-500">${this.state.user.currency}${b.spent.toLocaleString()} / ${this.state.user.currency}${b.limit.toLocaleString()}</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.badge_color}">${b.status}</span>
+                </div>
+              </div>
+              <div class="w-full bg-gray-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div class="${b.bar_color} h-full transition-all duration-500" style="width: ${b.pct}%"></div>
+              </div>
+              <div class="flex justify-between text-[10px] text-slate-400">
+                <span>Remaining: <strong class="${rem > 0 ? 'text-brand-600' : 'text-accent-rose'}">${this.state.user.currency}${rem.toLocaleString()}</strong></span>
+                <span>${b.pct}% spent</span>
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    // 8. Render Financial Alerts & Warnings
     const alertsContainer = document.getElementById('dashboard-alerts-list');
     if (alertsContainer) {
       alertsContainer.innerHTML = '';
-      if (!data.alerts || data.alerts.length === 0) {
+      const visibleAlerts = (data.alerts || []).filter(a => !this.state.dismissedAlertIds.has(a.id));
+      if (visibleAlerts.length === 0) {
         alertsContainer.innerHTML = `
           <div class="p-3 rounded-xl border border-brand-200 dark:border-brand-900/40 bg-brand-50/50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 text-xs flex items-center space-x-3">
             <svg class="w-4 h-4 shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -798,26 +989,36 @@ const MoneyTrackApp = {
           </div>
         `;
       } else {
-        data.alerts.forEach(a => {
+        visibleAlerts.forEach(a => {
           const isDanger = a.type === 'danger';
           const isWarning = a.type === 'warning';
           const bg = isDanger ? 'bg-accent-rose/10 border-accent-rose/20 text-accent-rose'
                      : (isWarning ? 'bg-accent-amber/10 border-accent-amber/20 text-accent-amber' : 'bg-brand-50 dark:bg-brand-900/30 border-brand-200 dark:border-brand-900/40 text-brand-600');
           alertsContainer.innerHTML += `
-            <div class="p-3 rounded-xl border ${bg} text-xs flex items-center space-x-3">
-              <svg class="w-5 h-5 shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span class="text-slate-800 dark:text-slate-200 font-medium">${a.message}</span>
+            <div class="p-3 rounded-xl border ${bg} text-xs flex items-start justify-between space-x-3">
+              <div class="flex items-start space-x-2.5">
+                <svg class="w-4 h-4 shrink-0 stroke-current fill-none stroke-2 mt-0.5" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <div>
+                  <div class="font-bold text-slate-900 dark:text-white">${this.escapeHtml(a.title)}</div>
+                  <div class="text-slate-700 dark:text-slate-300 mt-0.5">${this.escapeHtml(a.message)}</div>
+                </div>
+              </div>
+              <button onclick="MoneyTrackApp.dismissAlert('${a.id}')" class="text-slate-400 hover:text-slate-600 p-0.5" title="Dismiss">&times;</button>
             </div>
           `;
         });
       }
     }
 
-    // Render Notifications Modal List
+    // 9. Render Notifications Modal List
     const notifContainer = document.getElementById('notifications-modal-list');
+    const notifCountBadge = document.getElementById('notif-tab-alerts-count');
     if (notifContainer) {
       notifContainer.innerHTML = '';
-      if (!data.alerts || data.alerts.length === 0) {
+      const visibleAlerts = (data.alerts || []).filter(a => !this.state.dismissedAlertIds.has(a.id));
+      if (notifCountBadge) notifCountBadge.textContent = visibleAlerts.filter(a => a.type !== 'success').length;
+
+      if (visibleAlerts.length === 0) {
         notifContainer.innerHTML = `
           <div class="p-5 rounded-xl border border-gray-100 dark:border-slate-800 text-center space-y-1.5">
             <svg class="w-8 h-8 mx-auto stroke-current fill-none stroke-2 text-brand-500" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -826,28 +1027,31 @@ const MoneyTrackApp = {
           </div>
         `;
       } else {
-        data.alerts.forEach(a => {
+        visibleAlerts.forEach(a => {
           const isDanger = a.type === 'danger';
           const isWarning = a.type === 'warning';
           const cardBorder = isDanger ? 'border-accent-rose/30 bg-accent-rose/5' : (isWarning ? 'border-accent-amber/30 bg-accent-amber/5' : 'border-brand-500/20 bg-brand-50/5');
           const badgeClass = isDanger ? 'bg-accent-rose text-white' : (isWarning ? 'bg-accent-amber text-white' : 'bg-brand-600 text-white');
           notifContainer.innerHTML += `
-            <div class="p-3.5 rounded-xl border ${cardBorder} space-y-1.5">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-xs text-slate-900 dark:text-white">${a.title || (isDanger ? 'Critical Financial Alert' : (isWarning ? 'Budget Warning' : 'Financial Notice'))}</span>
-                <span class="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${badgeClass}">${a.type}</span>
+            <div class="p-3.5 rounded-xl border ${cardBorder} space-y-1.5 flex items-start justify-between">
+              <div class="space-y-1 flex-1 pr-2">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-xs text-slate-900 dark:text-white">${this.escapeHtml(a.title)}</span>
+                  <span class="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${badgeClass}">${a.type}</span>
+                </div>
+                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${this.escapeHtml(a.message)}</p>
               </div>
-              <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${a.message}</p>
+              <button onclick="MoneyTrackApp.dismissAlert('${a.id}')" class="text-slate-400 hover:text-slate-600 text-sm font-bold p-1" title="Dismiss Alert">&times;</button>
             </div>
           `;
         });
       }
     }
 
-    // Update Notification Bell Count
+    // 10. Update Notification Bell Count
     const bellBadge = document.getElementById('alert-badge-count');
     if (bellBadge) {
-      const warningCount = (data.alerts || []).filter(a => a.type !== 'success').length;
+      const warningCount = (data.alerts || []).filter(a => a.type !== 'success' && !this.state.dismissedAlertIds.has(a.id)).length;
       bellBadge.textContent = warningCount;
       if (warningCount > 0) {
         bellBadge.classList.remove('hidden');
@@ -856,6 +1060,360 @@ const MoneyTrackApp = {
         bellBadge.classList.add('hidden');
         bellBadge.style.display = 'none';
       }
+    }
+  },
+
+  dismissAlert: function(alertId) {
+    this.state.dismissedAlertIds.add(alertId);
+    if (this.state.activeDashboardData) {
+      this.renderDashboard(this.state.activeDashboardData);
+    }
+    this.showToast('Alert Dismissed', 'Notification removed from your active dashboard view.', 'info', 2000);
+  },
+
+  checkAndTriggerAlertNotifications: function(alerts) {
+    if (!alerts || !Array.isArray(alerts)) return;
+    const critical = alerts.filter(a => a.type === 'danger' && !this.state.dismissedAlertIds.has(a.id));
+    critical.forEach(a => {
+      // Trigger notification toast
+      this.showToast(a.title, a.message, 'danger', 6000);
+    });
+  },
+
+  // ==========================================
+  // Category Budget Limits Management
+  // ==========================================
+  openBudgetManagerModal: function() {
+    this.openModal('budget-manager-modal');
+
+    // Populate Category Dropdown
+    const catSelect = document.getElementById('budget-form-category');
+    if (catSelect) {
+      catSelect.innerHTML = '';
+      const existingCategories = new Set([
+        'Food & Dining', 'Transport', 'Shopping', 'Bills & Utilities',
+        'Entertainment', 'Healthcare', 'Education', 'Personal Care', 'Other'
+      ]);
+      (this.state.transactions || []).forEach(t => {
+        if (t.category) existingCategories.add(t.category);
+      });
+      existingCategories.forEach(c => {
+        catSelect.innerHTML += `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)}</option>`;
+      });
+    }
+
+    // Default target month to current month
+    const monthInput = document.getElementById('budget-form-month');
+    if (monthInput && !monthInput.value) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      monthInput.value = `${yyyy}-${mm}`;
+    }
+
+    // Scope label
+    const scopeLabel = document.getElementById('budget-modal-account-scope');
+    if (scopeLabel) {
+      const activeAcc = (this.state.accountSummaries || []).find(a => String(a.id) === String(this.state.selectedDashboardAccountId));
+      scopeLabel.textContent = activeAcc ? `Expenses tracked from: ${activeAcc.name}` : 'Tracking all account expenses';
+    }
+
+    this.renderBudgetManagerTable();
+  },
+
+  renderBudgetManagerTable: function() {
+    const tbody = document.getElementById('budget-manager-table-body');
+    if (!tbody) return;
+
+    const monthInput = document.getElementById('budget-form-month');
+    const month = monthInput ? monthInput.value : '';
+    const aid = this.state.selectedDashboardAccountId;
+
+    const url = `/api/budgets?${month ? 'month=' + month : ''}${aid ? '&account_id=' + aid : ''}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        tbody.innerHTML = '';
+        const budgets = data.budgets || [];
+        if (budgets.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6" class="py-6 text-center text-slate-400">
+                No category budgets configured for this month. Use the form above to set one.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        budgets.forEach(b => {
+          const rem = b.remaining !== undefined ? b.remaining : Math.max(0, b.limit - b.spent);
+          tbody.innerHTML += `
+            <tr class="hover:bg-gray-50 dark:hover:bg-slate-900/40 transition">
+              <td class="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
+                <span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5" style="background-color: ${b.color || '#3b82f6'}"></span>
+                ${this.escapeHtml(b.name)}
+              </td>
+              <td class="py-2.5 px-3 font-medium text-slate-700 dark:text-slate-300">
+                ${this.state.user.currency}${b.limit.toLocaleString()}
+              </td>
+              <td class="py-2.5 px-3 font-medium text-slate-700 dark:text-slate-300">
+                ${this.state.user.currency}${b.spent.toLocaleString()}
+              </td>
+              <td class="py-2.5 px-3 font-bold ${rem > 0 ? 'text-brand-600 dark:text-brand-400' : 'text-accent-rose'}">
+                ${this.state.user.currency}${rem.toLocaleString()}
+              </td>
+              <td class="py-2.5 px-3">
+                <div class="flex items-center space-x-2">
+                  <div class="w-16 bg-gray-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div class="${b.bar_color} h-full" style="width: ${Math.min(100, b.pct)}%"></div>
+                  </div>
+                  <span class="text-[10px] font-bold ${b.pct > 100 ? 'text-accent-rose' : 'text-slate-500'}">${b.pct}%</span>
+                </div>
+              </td>
+              <td class="py-2.5 px-3 text-center">
+                <button onclick="MoneyTrackApp.deleteBudget(${b.category_id}, '${b.month_year}')" class="p-1 rounded text-slate-400 hover:text-accent-rose hover:bg-rose-50 dark:hover:bg-rose-950/30 transition" title="Delete Budget Limit">
+                  <svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2 inline" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </td>
+            </tr>
+          `;
+        });
+      });
+  },
+
+  handleSaveBudget: function(event) {
+    if (event) event.preventDefault();
+    const category = document.getElementById('budget-form-category').value;
+    const limit = parseFloat(document.getElementById('budget-form-limit').value);
+    const month = document.getElementById('budget-form-month').value;
+
+    if (!category || isNaN(limit) || limit <= 0) {
+      this.showToast('Validation Error', 'Please enter a valid category and positive limit.', 'danger');
+      return;
+    }
+
+    fetch('/api/budgets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, limit, month })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          this.showToast('Budget Saved', `Monthly limit of ${this.state.user.currency}${limit.toLocaleString()} set for ${category}.`, 'success');
+          document.getElementById('budget-form-limit').value = '';
+          this.renderBudgetManagerTable();
+          this.refreshAllData();
+        } else {
+          this.showToast('Error', res.error || 'Failed to save budget', 'danger');
+        }
+      });
+  },
+
+  deleteBudget: function(categoryId, monthYear) {
+    if (!confirm('Remove this category budget limit?')) return;
+    fetch(`/api/budgets/${categoryId}?month=${monthYear}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          this.showToast('Budget Removed', 'Category spending limit removed.', 'info');
+          this.renderBudgetManagerTable();
+          this.refreshAllData();
+        }
+      });
+  },
+
+  // ==========================================
+  // Live Notifications & Diagnostics Controls
+  // ==========================================
+  openDiagnosticsModal: function() {
+    this.openModal('notifications-modal');
+    this.switchNotifTab('diagnostics');
+  },
+
+  switchNotifTab: function(tab) {
+    this.state.activeNotifTab = tab;
+    const btnAlerts = document.getElementById('notif-tab-btn-alerts');
+    const btnDiag = document.getElementById('notif-tab-btn-diagnostics');
+    const panelAlerts = document.getElementById('notif-panel-alerts');
+    const panelDiag = document.getElementById('notif-panel-diagnostics');
+
+    if (tab === 'alerts') {
+      if (btnAlerts) btnAlerts.className = 'pb-2 text-brand-600 dark:text-brand-400 border-b-2 border-brand-600';
+      if (btnDiag) btnDiag.className = 'pb-2 text-slate-400 border-b-2 border-transparent hover:text-slate-600';
+      if (panelAlerts) panelAlerts.classList.remove('hidden');
+      if (panelDiag) panelDiag.classList.add('hidden');
+    } else {
+      if (btnDiag) btnDiag.className = 'pb-2 text-brand-600 dark:text-brand-400 border-b-2 border-brand-600';
+      if (btnAlerts) btnAlerts.className = 'pb-2 text-slate-400 border-b-2 border-transparent hover:text-slate-600';
+      if (panelDiag) panelDiag.classList.remove('hidden');
+      if (panelAlerts) panelAlerts.classList.add('hidden');
+      this.renderDiagnostics();
+    }
+  },
+
+  renderDiagnostics: function() {
+    const list = document.getElementById('diagnostics-checks-list');
+    const statusBadge = document.getElementById('diagnostic-overall-status');
+    const progressBar = document.getElementById('diagnostic-progress-bar');
+    const summaryText = document.getElementById('diagnostic-summary-text');
+    if (!list) return;
+
+    fetch('/api/diagnostics')
+      .then(r => r.json())
+      .then(data => {
+        const diag = data.diagnostics || {};
+        if (statusBadge) {
+          statusBadge.textContent = diag.status ? diag.status.toUpperCase() : 'HEALTHY';
+          statusBadge.className = diag.status === 'healthy'
+            ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-100 text-brand-700'
+            : (diag.status === 'warning' ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent-amber/20 text-accent-amber' : 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent-rose/20 text-accent-rose');
+        }
+        if (progressBar) {
+          progressBar.style.width = `${diag.score || 100}%`;
+          progressBar.className = diag.score >= 80 ? 'bg-brand-500 h-full rounded-full' : (diag.score >= 50 ? 'bg-accent-amber h-full rounded-full' : 'bg-accent-rose h-full rounded-full');
+        }
+        if (summaryText) {
+          summaryText.textContent = `${diag.passed_checks || 0} of ${diag.total_checks || 0} checks passed (${diag.score || 100}% integrity score). Last verified at ${diag.timestamp || 'now'}.`;
+        }
+
+        list.innerHTML = '';
+        (diag.checks || []).forEach(chk => {
+          const isPass = chk.status === 'pass';
+          const isWarn = chk.status === 'warning';
+          const badgeClass = isPass ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300' : (isWarn ? 'bg-accent-amber/20 text-accent-amber' : 'bg-accent-rose/20 text-accent-rose');
+          const icon = isPass
+            ? '<svg class="w-4 h-4 text-brand-600 shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+            : '<svg class="w-4 h-4 text-accent-amber shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+
+          list.innerHTML += `
+            <div class="p-3 rounded-xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-start justify-between space-x-2">
+              <div class="flex items-start space-x-2.5">
+                ${icon}
+                <div>
+                  <div class="font-bold text-slate-900 dark:text-white">${this.escapeHtml(chk.name)}</div>
+                  <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${this.escapeHtml(chk.detail)}</p>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${badgeClass}">${chk.status}</span>
+            </div>
+          `;
+        });
+      });
+  },
+
+  openHealthAnalysisModal: function() {
+    this.openModal('health-analysis-modal');
+    const health = this.state.activeDashboardData ? this.state.activeDashboardData.health : null;
+    const ratingEl = document.getElementById('health-modal-rating');
+    const summaryEl = document.getElementById('health-modal-summary');
+    const recsEl = document.getElementById('health-modal-recommendations');
+
+    if (health) {
+      if (ratingEl) {
+        ratingEl.textContent = `Overall Diagnostic Rating: ${health.score} / 100 (${health.status})`;
+      }
+      if (summaryEl) {
+        summaryEl.textContent = `Your savings rate is currently ${health.savings_rate}, with budget discipline scored at ${health.budget_control} and emergency reserve covering ${health.emergency_reserve} of living costs.`;
+      }
+      if (recsEl) {
+        recsEl.innerHTML = '';
+        if (health.score >= 75) {
+          recsEl.innerHTML += '<li>Your finances are in an exceptional state! Continue your disciplined monthly savings allocations.</li>';
+          recsEl.innerHTML += '<li>Ensure your emergency liquid buffer reaches 6 full months of living costs.</li>';
+          recsEl.innerHTML += '<li>Consider deploying excess liquid balances into structured compounding instruments.</li>';
+        } else if (health.score >= 50) {
+          recsEl.innerHTML += '<li>Maintain closer oversight of discretionary spending categories to prevent budget warnings.</li>';
+          recsEl.innerHTML += '<li>Boost your savings rate toward the standard 20% benchmark.</li>';
+          recsEl.innerHTML += '<li>Review upcoming recurring calendar bills and ensure accounts maintain a positive liquidity buffer.</li>';
+        } else {
+          recsEl.innerHTML += '<li>Urgent: Reduce non-essential discretionary expenses to balance cashflow.</li>';
+          recsEl.innerHTML += '<li>Address any overdrawn or low-balance accounts to avoid debt accumulation.</li>';
+          recsEl.innerHTML += '<li>Prioritize building a minimum 1-month liquid emergency safety net immediately.</li>';
+        }
+      }
+    }
+  },
+
+  requestNotificationPermission: function() {
+    if (!('Notification' in window)) {
+      this.showToast('Browser Unsupported', 'Web Notification API is not supported in this browser.', 'warning');
+      return;
+    }
+    Notification.requestPermission().then(perm => {
+      const label = document.getElementById('tab-notifs-btn-label');
+      if (perm === 'granted') {
+        if (label) label.textContent = 'Tab Alerts Enabled (\u2713)';
+        this.showToast('Notifications Active', 'Live desktop notifications will now alert you even when switching browser tabs.', 'success');
+      } else {
+        if (label) label.textContent = 'Tab Alerts Blocked';
+        this.showToast('Notifications Blocked', 'Permission denied by browser settings.', 'warning');
+      }
+    });
+  },
+
+  showToast: function(title, message, type = 'info', duration = 5000) {
+    const container = document.getElementById('notification-toast-container');
+    if (!container) return;
+
+    const id = 'toast_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const toast = document.createElement('div');
+    toast.id = id;
+    toast.className = 'pointer-events-auto p-4 rounded-2xl shadow-xl border backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 flex items-start justify-between space-x-3 ';
+
+    let colorStyles = '';
+    let iconSvg = '';
+    if (type === 'success') {
+      colorStyles = 'bg-white dark:bg-slate-900 border-brand-500/40 text-brand-600 dark:text-brand-400';
+      iconSvg = '<svg class="w-5 h-5 text-brand-600 shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+    } else if (type === 'danger' || type === 'error') {
+      colorStyles = 'bg-white dark:bg-slate-900 border-accent-rose/50 text-accent-rose';
+      iconSvg = '<svg class="w-5 h-5 text-accent-rose shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    } else if (type === 'warning') {
+      colorStyles = 'bg-white dark:bg-slate-900 border-accent-amber/50 text-accent-amber';
+      iconSvg = '<svg class="w-5 h-5 text-accent-amber shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+    } else {
+      colorStyles = 'bg-white dark:bg-slate-900 border-accent-blue/40 text-accent-blue';
+      iconSvg = '<svg class="w-5 h-5 text-accent-blue shrink-0 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+    }
+
+    toast.className += colorStyles;
+    toast.innerHTML = `
+      <div class="flex items-start space-x-3">
+        ${iconSvg}
+        <div class="text-xs">
+          <div class="font-bold text-slate-900 dark:text-white">${this.escapeHtml(title)}</div>
+          <div class="text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">${this.escapeHtml(message)}</div>
+        </div>
+      </div>
+      <button onclick="document.getElementById('${id}')?.remove()" class="text-slate-400 hover:text-slate-600 p-1">&times;</button>
+    `;
+
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.classList.remove('translate-y-2', 'opacity-0');
+    });
+
+    if (duration > 0) {
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.classList.add('opacity-0', 'scale-95');
+          setTimeout(() => toast.remove(), 300);
+        }
+      }, duration);
+    }
+
+    // Tab Background handling
+    if (document.hidden) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification(title, { body: message });
+        } catch (e) {
+          // Fallback handled
+        }
+      }
+      document.title = `(\uD83D\uDD14) ${title} - MoneyTrack`;
     }
   },
 
@@ -1158,6 +1716,7 @@ const MoneyTrackApp = {
       .then(res => {
         if (res.success) {
           this.closeModal('transfer-modal');
+          this.showToast('Transfer Completed', 'Transferred funds between accounts successfully.', 'success');
           this.refreshAllData();
         } else {
           if (errEl) {
@@ -1321,9 +1880,10 @@ const MoneyTrackApp = {
     }).then(r => r.json()).then(res => {
       if (res.success) {
         this.closeModal('add-tx-modal');
+        this.showToast('Transaction Saved', `${type === 'income' ? 'Income' : 'Expense'} of ${this.state.user.currency}${amount.toLocaleString()} saved.`, 'success');
         this.refreshAllData();
       } else {
-        alert(res.error || 'Failed to save transaction.');
+        this.showToast('Error', res.error || 'Failed to save transaction.', 'danger');
       }
     });
   },
@@ -1337,7 +1897,7 @@ const MoneyTrackApp = {
     if (!newAmtStr) return;
     const newAmt = parseFloat(newAmtStr);
     if (isNaN(newAmt) || newAmt <= 0) {
-      alert('Please enter a valid positive amount.');
+      this.showToast('Validation Error', 'Please enter a valid positive amount.', 'danger');
       return;
     }
     const newDate = prompt('Edit Date (YYYY-MM-DD):', tx.date);
@@ -1356,9 +1916,10 @@ const MoneyTrackApp = {
       })
     }).then(r => r.json()).then(res => {
       if (res.success) {
+        this.showToast('Transaction Updated', 'Transaction record updated successfully.', 'success');
         this.refreshAllData();
       } else {
-        alert(res.error || 'Failed to update transaction.');
+        this.showToast('Error', res.error || 'Failed to update transaction.', 'danger');
       }
     });
   },
@@ -1367,29 +1928,19 @@ const MoneyTrackApp = {
     if (confirm('Delete this transaction?')) {
       fetch('/api/transactions/' + id, { method: 'DELETE' })
         .then(r => r.json())
-        .then(() => this.refreshAllData());
+        .then(() => {
+          this.showToast('Transaction Deleted', 'Transaction removed from ledger.', 'info');
+          this.refreshAllData();
+        });
     }
   },
 
   promptSetBudget: function(category, currentLimit) {
-    const limitStr = prompt(`Set monthly spending limit for ${category} (${this.state.user.currency}):`, currentLimit);
-    if (!limitStr) return;
-    const limit = parseFloat(limitStr);
-    if (isNaN(limit) || limit <= 0) {
-      alert('Please enter a valid positive budget limit.');
-      return;
-    }
-    fetch('/api/budgets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category: category, limit: limit })
-    }).then(r => r.json()).then(res => {
-      if (res.success) {
-        this.refreshAllData();
-      } else {
-        alert(res.error || 'Failed to update budget.');
-      }
-    });
+    this.openBudgetManagerModal();
+    const catSelect = document.getElementById('budget-form-category');
+    if (catSelect) catSelect.value = category;
+    const limitInput = document.getElementById('budget-form-limit');
+    if (limitInput) limitInput.value = currentLimit;
   },
 
   // Goals
@@ -1720,47 +2271,64 @@ const MoneyTrackApp = {
   },
 
   calculateEMI: function() {
-    const principal = parseFloat(document.getElementById('calc-emi-principal').value) || 0;
-    const rate = parseFloat(document.getElementById('calc-emi-rate').value) || 0;
-    const months = parseInt(document.getElementById('calc-emi-months').value) || 1;
+    const pEl = document.getElementById('calc-emi-principal');
+    const rEl = document.getElementById('calc-emi-rate');
+    const mEl = document.getElementById('calc-emi-months');
+    if (!pEl || !rEl || !mEl) return;
+    const principal = parseFloat(pEl.value) || 0;
+    const rate = parseFloat(rEl.value) || 0;
+    const months = parseInt(mEl.value) || 1;
 
     fetch('/api/calculators/emi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ principal, rate, months })
     }).then(r => r.json()).then(res => {
-      document.getElementById('res-emi-monthly').textContent = res.monthly_emi.toLocaleString();
-      document.getElementById('res-emi-interest').textContent = res.total_interest.toLocaleString();
-    });
+      const mRes = document.getElementById('res-emi-monthly');
+      const iRes = document.getElementById('res-emi-interest');
+      if (mRes) mRes.textContent = (res.monthly_emi || 0).toLocaleString();
+      if (iRes) iRes.textContent = (res.total_interest || 0).toLocaleString();
+    }).catch(e => console.warn('EMI calculation error:', e));
   },
 
   calculateCI: function() {
-    const principal = parseFloat(document.getElementById('calc-ci-principal').value) || 0;
-    const rate = parseFloat(document.getElementById('calc-ci-rate').value) || 0;
-    const years = parseFloat(document.getElementById('calc-ci-years').value) || 0;
+    const pEl = document.getElementById('calc-ci-principal');
+    const rEl = document.getElementById('calc-ci-rate');
+    const yEl = document.getElementById('calc-ci-years');
+    if (!pEl || !rEl || !yEl) return;
+    const principal = parseFloat(pEl.value) || 0;
+    const rate = parseFloat(rEl.value) || 0;
+    const years = parseFloat(yEl.value) || 0;
 
     fetch('/api/calculators/ci', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ principal, rate, years })
     }).then(r => r.json()).then(res => {
-      document.getElementById('res-ci-total').textContent = res.future_value.toLocaleString();
-      document.getElementById('res-ci-interest').textContent = res.interest_earned.toLocaleString();
-    });
+      const tRes = document.getElementById('res-ci-total');
+      const iRes = document.getElementById('res-ci-interest');
+      if (tRes) tRes.textContent = (res.future_value || 0).toLocaleString();
+      if (iRes) iRes.textContent = (res.interest_earned || 0).toLocaleString();
+    }).catch(e => console.warn('CI calculation error:', e));
   },
 
   calculateInflation: function() {
-    const cost = parseFloat(document.getElementById('calc-inf-cost').value) || 0;
-    const rate = parseFloat(document.getElementById('calc-inf-rate').value) || 0;
-    const years = parseFloat(document.getElementById('calc-inf-years').value) || 0;
+    const cEl = document.getElementById('calc-inf-cost');
+    const rEl = document.getElementById('calc-inf-rate');
+    const yEl = document.getElementById('calc-inf-years');
+    if (!cEl || !rEl || !yEl) return;
+    const cost = parseFloat(cEl.value) || 0;
+    const rate = parseFloat(rEl.value) || 0;
+    const years = parseFloat(yEl.value) || 0;
 
     fetch('/api/calculators/inflation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cost, rate, years })
     }).then(r => r.json()).then(res => {
-      document.getElementById('res-inf-future').textContent = res.future_cost.toLocaleString();
-    });
+      const fRes = document.getElementById('res-inf-future');
+      if (fRes) fRes.textContent = (res.future_cost || 0).toLocaleString();
+    }).catch(e => console.warn('Inflation calculation error:', e));
   },
 
   // Quizzes & Learning
@@ -2022,7 +2590,12 @@ const MoneyTrackApp = {
   // Modals
   openModal: function(modalId) {
     const m = document.getElementById(modalId);
-    if (m) m.classList.remove('hidden');
+    if (m) {
+      m.classList.remove('hidden');
+      if (modalId === 'notifications-modal') {
+        this.switchNotifTab(this.state.activeNotifTab || 'alerts');
+      }
+    }
   },
 
   closeModal: function(modalId) {
@@ -2031,6 +2604,10 @@ const MoneyTrackApp = {
   }
 };
 
-window.onload = function() {
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    MoneyTrackApp.init();
+  });
+} else {
   MoneyTrackApp.init();
-};
+}
