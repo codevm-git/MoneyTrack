@@ -27,8 +27,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     color TEXT NOT NULL DEFAULT '#3b82f6',
     icon TEXT NOT NULL DEFAULT 'bank',
     is_default INTEGER NOT NULL DEFAULT 0,
+    savings_goal_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE
+    FOREIGN KEY (profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (savings_goal_id) REFERENCES savings_goals(id) ON DELETE SET NULL
 );
 
 -- 3. Financial Categories
@@ -80,9 +82,14 @@ CREATE TABLE IF NOT EXISTS savings_goals (
     target_amount_paise INTEGER NOT NULL CHECK(target_amount_paise > 0),
     current_amount_paise INTEGER NOT NULL DEFAULT 0 CHECK(current_amount_paise >= 0),
     target_date TEXT NOT NULL,
+    description TEXT,
+    funding_account_id INTEGER,
+    wallet_account_id INTEGER,
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'completed', 'archived')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE
+    FOREIGN KEY (profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (funding_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+    FOREIGN KEY (wallet_account_id) REFERENCES accounts(id) ON DELETE SET NULL
 );
 
 -- 6. Future Money Calendar & Recurring Cashflow Events

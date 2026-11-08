@@ -484,10 +484,11 @@ def create_goal():
         target = data.get('targetAmount')
         current = data.get('currentAmount', 0)
         date = data.get('date')
-        raw_acc_id = data.get('account_id') or data.get('accountId')
+        description = data.get('description', '')
+        raw_acc_id = data.get('account_id') or data.get('accountId') or data.get('funding_account_id')
         account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
 
-        goal_id = fin_service.add_goal(profile_id, name, target, current, date, account_id=account_id)
+        goal_id = fin_service.add_goal(profile_id, name, target, current, date, account_id=account_id, description=description)
         return jsonify({'success': True, 'id': goal_id}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -499,8 +500,9 @@ def deposit_goal(goal_id):
     amount = data.get('amount', 1000)
     raw_acc_id = data.get('account_id') or data.get('accountId')
     account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
+    note = data.get('note') or data.get('description')
     try:
-        fin_service.deposit_goal(profile_id, goal_id, amount, account_id=account_id)
+        fin_service.deposit_goal(profile_id, goal_id, amount, account_id=account_id, note=note)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -512,8 +514,9 @@ def withdraw_goal(goal_id):
     amount = data.get('amount', 500)
     raw_acc_id = data.get('account_id') or data.get('accountId')
     account_id = int(raw_acc_id) if raw_acc_id is not None and str(raw_acc_id).isdigit() else None
+    note = data.get('note') or data.get('description')
     try:
-        fin_service.withdraw_goal(profile_id, goal_id, amount, account_id=account_id)
+        fin_service.withdraw_goal(profile_id, goal_id, amount, account_id=account_id, note=note)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -526,7 +529,8 @@ def edit_goal(goal_id):
         name = data.get('name')
         target = data.get('targetAmount')
         date = data.get('date')
-        fin_service.edit_goal(profile_id, goal_id, name, target, date)
+        description = data.get('description')
+        fin_service.edit_goal(profile_id, goal_id, name, target, date, description=description)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -534,8 +538,17 @@ def edit_goal(goal_id):
 @api_bp.route('/goals/<int:goal_id>', methods=['DELETE'])
 def delete_goal(goal_id):
     profile_id = get_current_profile_id()
-    fin_service.delete_goal(profile_id, goal_id)
-    return jsonify({'success': True})
+    data = request.get_json(silent=True) or {}
+    dest_acc_id = data.get('destination_account_id') or data.get('destinationAccountId')
+    if dest_acc_id is not None and str(dest_acc_id).isdigit():
+        dest_acc_id = int(dest_acc_id)
+    else:
+        dest_acc_id = None
+    try:
+        fin_service.delete_goal(profile_id, goal_id, destination_account_id=dest_acc_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 # --- Calendar ---
 @api_bp.route('/calendar', methods=['GET'])
