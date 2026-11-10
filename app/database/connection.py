@@ -46,6 +46,20 @@ def init_db(db_path=None):
         if 'destination_account_id' not in tx_cols:
             conn.execute("ALTER TABLE transactions ADD COLUMN destination_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;")
 
+        # Check if savings_goals needs columns migration
+        goal_cols = [c[1] for c in conn.execute("PRAGMA table_info(savings_goals);").fetchall()]
+        if 'wallet_account_id' not in goal_cols:
+            conn.execute("ALTER TABLE savings_goals ADD COLUMN wallet_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;")
+        if 'funding_account_id' not in goal_cols:
+            conn.execute("ALTER TABLE savings_goals ADD COLUMN funding_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;")
+        if 'description' not in goal_cols:
+            conn.execute("ALTER TABLE savings_goals ADD COLUMN description TEXT;")
+
+        # Check if accounts table needs savings_goal_id column migration
+        acc_cols = [c[1] for c in conn.execute("PRAGMA table_info(accounts);").fetchall()]
+        if 'savings_goal_id' not in acc_cols:
+            conn.execute("ALTER TABLE accounts ADD COLUMN savings_goal_id INTEGER REFERENCES savings_goals(id) ON DELETE SET NULL;")
+
         # Check if user_profiles table needs password_hash column migration
         user_cols = [c[1] for c in conn.execute("PRAGMA table_info(user_profiles);").fetchall()]
         if 'password_hash' not in user_cols:

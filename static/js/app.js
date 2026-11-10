@@ -1463,14 +1463,21 @@ const MoneyTrackApp = {
     };
 
     this.state.accounts.forEach(acc => {
-      const icon = typeIcons[acc.account_type] || '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
-      const badgeStyle = typeBadgeStyles[acc.account_type] || 'bg-gray-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-gray-200';
       const isCredit = acc.account_type === 'credit_card';
       const isNegative = acc.current_balance < 0;
+      const isSavingsWallet = Boolean(acc.is_savings_wallet || acc.savings_goal_id);
+
+      const icon = isSavingsWallet ?
+        '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' :
+        (typeIcons[acc.account_type] || '<svg class="w-4 h-4 stroke-current fill-none stroke-2 inline-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>');
+      
+      const badgeStyle = isSavingsWallet ?
+        'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' :
+        (typeBadgeStyles[acc.account_type] || 'bg-gray-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-gray-200');
 
       let balDisplay = `${this.state.user.currency}${Math.abs(acc.current_balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       let balColor = 'text-slate-900 dark:text-white';
-      let balSubtext = 'Available Balance';
+      let balSubtext = isSavingsWallet ? 'Dedicated Goal Savings' : 'Available Balance';
 
       if (isCredit) {
         balSubtext = acc.current_balance > 0 ? 'Outstanding Due' : 'Paid in Full';
@@ -1486,6 +1493,35 @@ const MoneyTrackApp = {
         </span>
       ` : '';
 
+      const badgeLabel = isSavingsWallet ?
+        `🎯 Goal: ${this.escapeHtml(acc.savings_goal_name || acc.name.replace('Savings Wallet – ', ''))}` :
+        acc.type_label;
+
+      const actionButtons = isSavingsWallet ? `
+        <button onclick="MoneyTrackApp.openAddGoalMoneyModal(${acc.savings_goal_id})" title="Deposit money to this savings goal" class="p-1 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button onclick="MoneyTrackApp.openWithdrawGoalMoneyModal(${acc.savings_goal_id})" title="Withdraw money from this savings goal" class="p-1 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button onclick="MoneyTrackApp.filterByAccount(${acc.id})" title="Filter transactions for this wallet" class="p-1 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </button>
+        <button onclick="MoneyTrackApp.openDeleteGoalModal(${acc.savings_goal_id})" title="Delete savings goal & return money" class="p-1 rounded-lg text-slate-400 hover:text-accent-rose hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      ` : `
+        <button onclick="MoneyTrackApp.openTransferModal(${acc.id})" title="Transfer money from this account" class="p-1 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16"/></svg>
+        </button>
+        <button onclick="MoneyTrackApp.filterByAccount(${acc.id})" title="Filter transactions for this account" class="p-1 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </button>
+        <button onclick="MoneyTrackApp.deleteAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}')" title="Delete account" class="p-1 rounded-lg text-slate-400 hover:text-accent-rose hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+          <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      `;
+
       grid.innerHTML += `
         <div class="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 shadow-sm hover:border-brand-500/50 transition relative group flex flex-col justify-between">
           <div>
@@ -1496,24 +1532,16 @@ const MoneyTrackApp = {
                 </div>
                 <div>
                   <div class="font-bold text-xs text-slate-900 dark:text-white flex items-center space-x-1.5">
-                    <span>${acc.name}</span>
+                    <span>${this.escapeHtml(acc.name)}</span>
                     ${isDefaultBadge}
                   </div>
                   <span class="inline-block mt-0.5 px-2 py-0.5 rounded border text-[10px] font-semibold ${badgeStyle}">
-                    ${acc.type_label}
+                    ${badgeLabel}
                   </span>
                 </div>
               </div>
               <div class="flex items-center space-x-1">
-                <button onclick="MoneyTrackApp.openTransferModal(${acc.id})" title="Transfer money from this account" class="p-1 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
-                  <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16"/></svg>
-                </button>
-                <button onclick="MoneyTrackApp.filterByAccount(${acc.id})" title="Filter transactions for this account" class="p-1 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
-                  <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-                </button>
-                <button onclick="MoneyTrackApp.deleteAccount(${acc.id}, '${acc.name.replace(/'/g, "\\'")}')" title="Delete account" class="p-1 rounded-lg text-slate-400 hover:text-accent-rose hover:bg-gray-100 dark:hover:bg-slate-800 transition">
-                  <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                </button>
+                ${actionButtons}
               </div>
             </div>
 
@@ -1543,6 +1571,9 @@ const MoneyTrackApp = {
     const xferTo = document.getElementById('transfer-form-to');
     const goalAccount = document.getElementById('goal-form-account');
     const goalActionAcc = document.getElementById('goal-action-account');
+    const addMoneySource = document.getElementById('add-goal-money-source');
+    const withdrawDest = document.getElementById('withdraw-goal-money-dest');
+    const deleteDest = document.getElementById('delete-goal-dest-account');
 
     if (filterSelect) {
       const curFilterVal = filterSelect.value || 'ALL';
@@ -1612,13 +1643,68 @@ const MoneyTrackApp = {
       }
     }
 
+    // Funding source for goal creation (exclude other savings wallets and credit cards)
     if (goalAccount) {
       const curVal = goalAccount.value;
       goalAccount.innerHTML = '<option value="">Do not deduct from an account</option>';
-      this.state.accounts.forEach(acc => {
-        goalAccount.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
+      const fundAccounts = this.state.accounts.filter(a => !a.is_savings_wallet && a.account_type !== 'credit_card');
+      fundAccounts.forEach(acc => {
+        goalAccount.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${this.state.user.currency}${acc.current_balance.toLocaleString('en-IN', {minimumFractionDigits: 2})})</option>`;
       });
-      if (curVal) goalAccount.value = curVal;
+      if (curVal && fundAccounts.some(a => String(a.id) === String(curVal))) {
+        goalAccount.value = curVal;
+      }
+    }
+
+    // Add Money source account
+    if (addMoneySource) {
+      const curVal = addMoneySource.value;
+      addMoneySource.innerHTML = '';
+      const fundAccounts = this.state.accounts.filter(a => !a.is_savings_wallet && a.account_type !== 'credit_card');
+      if (fundAccounts.length === 0) {
+        addMoneySource.innerHTML = '<option value="">No funding account available</option>';
+      } else {
+        fundAccounts.forEach(acc => {
+          addMoneySource.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (Available: ${this.state.user.currency}${acc.current_balance.toLocaleString('en-IN', {minimumFractionDigits: 2})})</option>`;
+        });
+        if (curVal && fundAccounts.some(a => String(a.id) === String(curVal))) {
+          addMoneySource.value = curVal;
+        }
+      }
+    }
+
+    // Withdraw destination account
+    if (withdrawDest) {
+      const curVal = withdrawDest.value;
+      withdrawDest.innerHTML = '';
+      const destAccounts = this.state.accounts.filter(a => !a.is_savings_wallet && a.account_type !== 'credit_card');
+      if (destAccounts.length === 0) {
+        withdrawDest.innerHTML = '<option value="">No destination account available</option>';
+      } else {
+        destAccounts.forEach(acc => {
+          withdrawDest.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${this.state.user.currency}${acc.current_balance.toLocaleString('en-IN', {minimumFractionDigits: 2})})</option>`;
+        });
+        if (curVal && destAccounts.some(a => String(a.id) === String(curVal))) {
+          withdrawDest.value = curVal;
+        }
+      }
+    }
+
+    // Delete goal return destination account
+    if (deleteDest) {
+      const curVal = deleteDest.value;
+      deleteDest.innerHTML = '';
+      const returnAccounts = this.state.accounts.filter(a => !a.is_savings_wallet && a.account_type !== 'credit_card');
+      if (returnAccounts.length === 0) {
+        deleteDest.innerHTML = '<option value="">No return account available</option>';
+      } else {
+        returnAccounts.forEach(acc => {
+          deleteDest.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label} - ${this.state.user.currency}${acc.current_balance.toLocaleString('en-IN', {minimumFractionDigits: 2})})</option>`;
+        });
+        if (curVal && returnAccounts.some(a => String(a.id) === String(curVal))) {
+          deleteDest.value = curVal;
+        }
+      }
     }
 
     if (goalActionAcc) {
@@ -2243,38 +2329,75 @@ const MoneyTrackApp = {
   // Goals
   renderGoals: function() {
     const container = document.getElementById('goals-grid-container');
+    if (!container) return;
     container.innerHTML = '';
 
+    if (this.state.goals.length === 0) {
+      container.innerHTML = `
+        <div class="col-span-full p-8 rounded-2xl border border-dashed border-gray-200 dark:border-slate-800 text-center text-xs text-slate-400 space-y-3">
+          <div class="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+            <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          </div>
+          <p class="font-semibold text-slate-700 dark:text-slate-300">No savings goals set yet.</p>
+          <p class="max-w-xs mx-auto text-[11px]">Set a target, create a dedicated savings wallet, and fund your financial goals systematically.</p>
+          <button onclick="MoneyTrackApp.openModal('add-goal-modal')" class="py-2 px-3.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold inline-flex items-center space-x-1.5 transition shadow-sm">
+            <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Create First Goal</span>
+          </button>
+        </div>
+      `;
+      return;
+    }
+
     this.state.goals.forEach(goal => {
+      const isCompleted = goal.status === 'completed' || goal.pct >= 100;
+      const statusBadge = isCompleted ? `
+        <span class="px-2 py-0.5 rounded border text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800">
+          COMPLETED
+        </span>
+      ` : `
+        <span class="text-xs font-bold text-brand-600 dark:text-brand-400">${goal.pct}%</span>
+      `;
+
       container.innerHTML += `
-        <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4 flex flex-col justify-between shadow-sm">
+        <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4 flex flex-col justify-between shadow-sm hover:border-brand-500/40 transition">
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <h3 class="font-bold text-slate-900 dark:text-white text-base">${goal.name}</h3>
-              <span class="text-xs font-bold text-brand-600 dark:text-brand-400">${goal.pct}%</span>
+              <div>
+                <h3 class="font-bold text-slate-900 dark:text-white text-base">${this.escapeHtml(goal.name)}</h3>
+                ${goal.description ? `<p class="text-[11px] text-slate-400 truncate max-w-[220px] mt-0.5">${this.escapeHtml(goal.description)}</p>` : ''}
+              </div>
+              ${statusBadge}
             </div>
 
             <div class="text-xl font-bold text-slate-900 dark:text-white">
-              ${this.state.user.currency}${goal.currentAmount.toLocaleString()} <span class="text-xs text-slate-400 font-normal">/ ${this.state.user.currency}${goal.targetAmount.toLocaleString()}</span>
+              ${this.state.user.currency}${goal.currentAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+              <span class="text-xs text-slate-400 font-normal">/ ${this.state.user.currency}${goal.targetAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
             </div>
 
             <div class="w-full bg-gray-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
-              <div class="bg-brand-500 h-full transition-all duration-500" style="width: ${goal.pct}%"></div>
+              <div class="${isCompleted ? 'bg-emerald-500' : 'bg-brand-500'} h-full transition-all duration-500" style="width: ${goal.pct}%"></div>
             </div>
 
             <div class="flex justify-between text-xs text-slate-400 pt-1">
-              <span>${this.state.user.currency}${goal.remaining.toLocaleString()} remaining</span>
+              <span>${this.state.user.currency}${goal.remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} remaining</span>
               <span>Target: ${goal.date}</span>
             </div>
           </div>
 
           <div class="flex items-center space-x-2 pt-2 border-t border-gray-100 dark:border-slate-800">
-            <button onclick="MoneyTrackApp.openGoalActionModal('${goal.id}', 'deposit')" class="flex-1 py-2 px-2.5 rounded-xl bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 text-xs font-semibold hover:bg-brand-100 transition">+ Deposit</button>
-            <button onclick="MoneyTrackApp.openGoalActionModal('${goal.id}', 'withdraw')" class="py-2 px-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-gray-200 dark:hover:bg-slate-700 transition" title="Withdraw Funds">- Withdraw</button>
-            <button onclick="MoneyTrackApp.promptEditGoal('${goal.id}')" class="p-2 rounded-xl text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition" title="Edit Goal">
+            <button onclick="MoneyTrackApp.openAddGoalMoneyModal('${goal.id}')" class="flex-1 py-2 px-2.5 rounded-xl bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 text-xs font-semibold hover:bg-brand-100 dark:hover:bg-brand-900/50 transition flex items-center justify-center space-x-1">
+              <svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add Money</span>
+            </button>
+            <button onclick="MoneyTrackApp.openWithdrawGoalMoneyModal('${goal.id}')" class="flex-1 py-2 px-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-gray-200 dark:hover:bg-slate-700 transition flex items-center justify-center space-x-1" title="Withdraw Funds">
+              <svg class="w-3.5 h-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Withdraw</span>
+            </button>
+            <button onclick="MoneyTrackApp.openEditGoalModal('${goal.id}')" class="p-2 rounded-xl text-slate-400 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition" title="Edit Goal">
               <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </button>
-            <button onclick="MoneyTrackApp.deleteGoal('${goal.id}')" class="p-2 rounded-xl text-slate-400 hover:text-accent-rose hover:bg-gray-100 dark:hover:bg-slate-800 transition" title="Delete Goal">
+            <button onclick="MoneyTrackApp.openDeleteGoalModal('${goal.id}')" class="p-2 rounded-xl text-slate-400 hover:text-accent-rose hover:bg-gray-100 dark:hover:bg-slate-800 transition" title="Delete Goal & Return Funds">
               <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
@@ -2285,111 +2408,314 @@ const MoneyTrackApp = {
 
   submitGoalForm: function(e) {
     e.preventDefault();
-    const name = document.getElementById('goal-form-name').value;
+    const name = document.getElementById('goal-form-name').value.trim();
     const targetAmount = parseFloat(document.getElementById('goal-form-target').value);
     const currentAmount = parseFloat(document.getElementById('goal-form-current').value || 0);
     const date = document.getElementById('goal-form-date').value;
+    const descEl = document.getElementById('goal-form-desc');
+    const description = descEl ? descEl.value.trim() : '';
     const accEl = document.getElementById('goal-form-account');
     const account_id = accEl && accEl.value ? parseInt(accEl.value) : null;
+
+    if (!name) {
+      this.showToast('Please enter a goal name.', 'warning');
+      return;
+    }
+    if (isNaN(targetAmount) || targetAmount <= 0) {
+      this.showToast('Please enter a valid target amount greater than zero.', 'warning');
+      return;
+    }
+    if (currentAmount > 0 && !account_id) {
+      if (this.state.accounts.length === 0) {
+        this.showToast('You must create an Account or Wallet first to fund a savings goal.', 'warning');
+        return;
+      }
+    }
 
     fetch('/api/goals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, targetAmount, currentAmount, date, account_id })
+      body: JSON.stringify({ name, targetAmount, currentAmount, date, account_id, description })
     }).then(r => r.json()).then(res => {
       if (res.success) {
         this.closeModal('add-goal-modal');
+        this.showToast(`Savings Goal "${name}" created with dedicated savings wallet!`, 'success');
         this.refreshAllData();
       } else {
-        alert(res.error || 'Failed to create goal');
+        this.showToast(res.error || 'Failed to create goal', 'danger');
       }
+    }).catch(err => {
+      console.error('Goal creation error:', err);
+      this.showToast('An unexpected network error occurred.', 'danger');
     });
   },
 
-  openGoalActionModal: function(goalId, actionType) {
+  openAddGoalMoneyModal: function(goalId) {
     const goal = this.state.goals.find(g => String(g.id) === String(goalId));
     if (!goal) return;
 
     this.populateAccountSelects();
-    document.getElementById('goal-action-id').value = goalId;
-    document.getElementById('goal-action-type').value = actionType;
-    document.getElementById('goal-action-amount').value = '';
+    document.getElementById('add-goal-money-id').value = goalId;
+    document.getElementById('add-goal-money-subtitle').textContent = `Deposit savings into ${goal.name}`;
+    document.getElementById('add-goal-money-current').textContent = `${this.state.user.currency}${goal.currentAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+    document.getElementById('add-goal-money-target').textContent = `${this.state.user.currency}${goal.targetAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+    document.getElementById('add-goal-money-amount').value = '';
+    const descEl = document.getElementById('add-goal-money-desc');
+    if (descEl) descEl.value = '';
 
-    const isDeposit = actionType === 'deposit';
-    document.getElementById('goal-action-modal-title').textContent = isDeposit ? `Deposit to ${goal.name}` : `Withdraw from ${goal.name}`;
-    document.getElementById('goal-action-submit-btn').textContent = isDeposit ? 'Confirm Deposit' : 'Confirm Withdrawal';
-
-    const label = document.getElementById('goal-action-account-label');
-    if (label) {
-      label.textContent = isDeposit ? 'Deduct from Account / Wallet (Optional)' : 'Credit to Account / Wallet (Optional)';
+    // If goal had a funding account, preselect it if available
+    if (goal.funding_account_id) {
+      const srcEl = document.getElementById('add-goal-money-source');
+      if (srcEl && Array.from(srcEl.options).some(o => String(o.value) === String(goal.funding_account_id))) {
+        srcEl.value = String(goal.funding_account_id);
+      }
     }
 
-    this.openModal('goal-action-modal');
+    this.openModal('add-goal-money-modal');
+  },
+
+  submitAddGoalMoney: function(e) {
+    e.preventDefault();
+    const goalId = document.getElementById('add-goal-money-id').value;
+    const amount = parseFloat(document.getElementById('add-goal-money-amount').value);
+    const sourceEl = document.getElementById('add-goal-money-source');
+    const account_id = sourceEl && sourceEl.value ? parseInt(sourceEl.value) : null;
+    const descEl = document.getElementById('add-goal-money-desc');
+    const note = descEl ? descEl.value.trim() : '';
+
+    if (isNaN(amount) || amount <= 0) {
+      this.showToast('Please enter a valid deposit amount greater than zero.', 'warning');
+      return;
+    }
+    if (!account_id) {
+      this.showToast('Please select a source account or wallet to fund the deposit.', 'warning');
+      return;
+    }
+
+    const sourceAcc = this.state.accounts.find(a => String(a.id) === String(account_id));
+    if (sourceAcc && amount > sourceAcc.current_balance) {
+      this.showToast(`Insufficient balance in ${sourceAcc.name}. Available: ${this.state.user.currency}${sourceAcc.current_balance.toLocaleString('en-IN', {minimumFractionDigits: 2})}`, 'danger');
+      return;
+    }
+
+    fetch(`/api/goals/${goalId}/deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, account_id, note })
+    }).then(r => r.json()).then(res => {
+      if (res.success) {
+        this.closeModal('add-goal-money-modal');
+        this.showToast(`Successfully deposited ${this.state.user.currency}${amount.toLocaleString()} into savings!`, 'success');
+        this.refreshAllData();
+      } else {
+        this.showToast(res.error || 'Failed to deposit funds.', 'danger');
+      }
+    }).catch(err => {
+      console.error('Goal deposit error:', err);
+      this.showToast('An unexpected network error occurred.', 'danger');
+    });
+  },
+
+  openWithdrawGoalMoneyModal: function(goalId) {
+    const goal = this.state.goals.find(g => String(g.id) === String(goalId));
+    if (!goal) return;
+
+    this.populateAccountSelects();
+    document.getElementById('withdraw-goal-money-id').value = goalId;
+    document.getElementById('withdraw-goal-money-subtitle').textContent = `Withdraw funds from ${goal.name}`;
+    document.getElementById('withdraw-goal-money-available').textContent = `${this.state.user.currency}${goal.currentAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+    document.getElementById('withdraw-goal-money-amount').value = '';
+    const descEl = document.getElementById('withdraw-goal-money-desc');
+    if (descEl) descEl.value = '';
+
+    // If goal had a funding account, preselect as destination
+    if (goal.funding_account_id) {
+      const destEl = document.getElementById('withdraw-goal-money-dest');
+      if (destEl && Array.from(destEl.options).some(o => String(o.value) === String(goal.funding_account_id))) {
+        destEl.value = String(goal.funding_account_id);
+      }
+    }
+
+    this.openModal('withdraw-goal-money-modal');
+  },
+
+  submitWithdrawGoalMoney: function(e) {
+    e.preventDefault();
+    const goalId = document.getElementById('withdraw-goal-money-id').value;
+    const amount = parseFloat(document.getElementById('withdraw-goal-money-amount').value);
+    const destEl = document.getElementById('withdraw-goal-money-dest');
+    const account_id = destEl && destEl.value ? parseInt(destEl.value) : null;
+    const descEl = document.getElementById('withdraw-goal-money-desc');
+    const note = descEl ? descEl.value.trim() : '';
+
+    const goal = this.state.goals.find(g => String(g.id) === String(goalId));
+    if (!goal) return;
+
+    if (isNaN(amount) || amount <= 0) {
+      this.showToast('Please enter a valid withdrawal amount greater than zero.', 'warning');
+      return;
+    }
+    if (amount > goal.currentAmount) {
+      this.showToast(`Cannot withdraw ${this.state.user.currency}${amount.toLocaleString()}: exceeds available savings of ${this.state.user.currency}${goal.currentAmount.toLocaleString()}.`, 'danger');
+      return;
+    }
+    if (!account_id) {
+      this.showToast('Please select a destination account or wallet.', 'warning');
+      return;
+    }
+
+    fetch(`/api/goals/${goalId}/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, account_id, note })
+    }).then(r => r.json()).then(res => {
+      if (res.success) {
+        this.closeModal('withdraw-goal-money-modal');
+        this.showToast(`Successfully withdrew ${this.state.user.currency}${amount.toLocaleString()} from savings!`, 'success');
+        this.refreshAllData();
+      } else {
+        this.showToast(res.error || 'Failed to withdraw funds.', 'danger');
+      }
+    }).catch(err => {
+      console.error('Goal withdraw error:', err);
+      this.showToast('An unexpected network error occurred.', 'danger');
+    });
+  },
+
+  openEditGoalModal: function(goalId) {
+    const goal = this.state.goals.find(g => String(g.id) === String(goalId));
+    if (!goal) return;
+
+    document.getElementById('edit-goal-id').value = goalId;
+    document.getElementById('edit-goal-name').value = goal.name || '';
+    document.getElementById('edit-goal-target').value = goal.targetAmount || '';
+    document.getElementById('edit-goal-date').value = goal.date || '';
+    const descEl = document.getElementById('edit-goal-desc');
+    if (descEl) descEl.value = goal.description || '';
+
+    this.openModal('edit-goal-modal');
+  },
+
+  submitEditGoal: function(e) {
+    e.preventDefault();
+    const goalId = document.getElementById('edit-goal-id').value;
+    const name = document.getElementById('edit-goal-name').value.trim();
+    const targetAmount = parseFloat(document.getElementById('edit-goal-target').value);
+    const date = document.getElementById('edit-goal-date').value;
+    const descEl = document.getElementById('edit-goal-desc');
+    const description = descEl ? descEl.value.trim() : '';
+
+    if (!name) {
+      this.showToast('Please enter a goal title.', 'warning');
+      return;
+    }
+    if (isNaN(targetAmount) || targetAmount <= 0) {
+      this.showToast('Please enter a valid positive target amount.', 'warning');
+      return;
+    }
+
+    fetch(`/api/goals/${goalId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, targetAmount, date, description })
+    }).then(r => r.json()).then(res => {
+      if (res.success) {
+        this.closeModal('edit-goal-modal');
+        this.showToast('Savings goal updated successfully!', 'success');
+        this.refreshAllData();
+      } else {
+        this.showToast(res.error || 'Failed to update goal.', 'danger');
+      }
+    }).catch(err => {
+      console.error('Goal update error:', err);
+      this.showToast('An unexpected network error occurred.', 'danger');
+    });
+  },
+
+  openDeleteGoalModal: function(goalId) {
+    const goal = this.state.goals.find(g => String(g.id) === String(goalId));
+    if (!goal) return;
+
+    this.populateAccountSelects();
+    document.getElementById('delete-goal-id').value = goalId;
+    document.getElementById('delete-goal-subtitle').textContent = `Delete goal "${goal.name}"`;
+
+    const banner = document.getElementById('delete-goal-balance-banner');
+    const destContainer = document.getElementById('delete-goal-dest-container');
+    const confirmBtn = document.getElementById('delete-goal-confirm-btn');
+    const balDisplay = document.getElementById('delete-goal-balance-display');
+
+    if (goal.currentAmount > 0) {
+      if (banner) banner.classList.remove('hidden');
+      if (destContainer) destContainer.classList.remove('hidden');
+      if (balDisplay) balDisplay.textContent = `${this.state.user.currency}${goal.currentAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+      if (confirmBtn) confirmBtn.textContent = 'Return Funds & Delete Goal';
+
+      // Pre-select funding account if available
+      if (goal.funding_account_id) {
+        const sel = document.getElementById('delete-goal-dest-account');
+        if (sel && Array.from(sel.options).some(o => String(o.value) === String(goal.funding_account_id))) {
+          sel.value = String(goal.funding_account_id);
+        }
+      }
+    } else {
+      if (banner) banner.classList.add('hidden');
+      if (destContainer) destContainer.classList.add('hidden');
+      if (confirmBtn) confirmBtn.textContent = 'Delete Goal';
+    }
+
+    this.openModal('delete-goal-modal');
+  },
+
+  submitDeleteGoal: function(e) {
+    e.preventDefault();
+    const goalId = document.getElementById('delete-goal-id').value;
+    const destEl = document.getElementById('delete-goal-dest-account');
+    const destination_account_id = destEl && destEl.value ? parseInt(destEl.value) : null;
+
+    fetch(`/api/goals/${goalId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destination_account_id })
+    }).then(r => r.json()).then(res => {
+      if (res.success) {
+        this.closeModal('delete-goal-modal');
+        this.showToast('Savings goal deleted and remaining funds safely returned.', 'success');
+        this.refreshAllData();
+      } else {
+        this.showToast(res.error || 'Failed to delete goal.', 'danger');
+      }
+    }).catch(err => {
+      console.error('Goal delete error:', err);
+      this.showToast('An unexpected network error occurred.', 'danger');
+    });
+  },
+
+  // Legacy & Backward Compatibility Wrappers
+  openGoalActionModal: function(goalId, actionType) {
+    if (actionType === 'deposit') {
+      this.openAddGoalMoneyModal(goalId);
+    } else {
+      this.openWithdrawGoalMoneyModal(goalId);
+    }
   },
 
   submitGoalAction: function(e) {
     e.preventDefault();
-    const goalId = document.getElementById('goal-action-id').value;
-    const actionType = document.getElementById('goal-action-type').value;
-    const amount = parseFloat(document.getElementById('goal-action-amount').value);
-    const accEl = document.getElementById('goal-action-account');
-    const account_id = accEl && accEl.value ? parseInt(accEl.value) : null;
-
-    if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid positive amount.');
-      return;
+    const actionType = document.getElementById('goal-action-type')?.value;
+    if (actionType === 'deposit') {
+      this.submitAddGoalMoney(e);
+    } else {
+      this.submitWithdrawGoalMoney(e);
     }
-
-    const endpoint = actionType === 'deposit' ? `/api/goals/${goalId}/deposit` : `/api/goals/${goalId}/withdraw`;
-    fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: amount, account_id: account_id })
-    }).then(r => r.json()).then(res => {
-      if (res.success) {
-        this.closeModal('goal-action-modal');
-        this.refreshAllData();
-      } else {
-        alert(res.error || `Failed to ${actionType} funds.`);
-      }
-    }).catch(err => {
-      console.error('Goal action error:', err);
-      alert('An unexpected error occurred.');
-    });
   },
 
   promptEditGoal: function(id) {
-    const goal = this.state.goals.find(g => String(g.id) === String(id));
-    if (!goal) return;
-    const newName = prompt('Edit Goal Title:', goal.name);
-    if (!newName) return;
-    const newTargetStr = prompt('Edit Target Amount (' + this.state.user.currency + '):', goal.targetAmount);
-    if (!newTargetStr) return;
-    const newTarget = parseFloat(newTargetStr);
-    if (isNaN(newTarget) || newTarget <= 0) {
-      alert('Please enter a valid positive target amount.');
-      return;
-    }
-    const newDate = prompt('Edit Target Date (YYYY-MM-DD):', goal.date);
-    if (!newDate) return;
-
-    fetch(`/api/goals/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName, targetAmount: newTarget, date: newDate })
-    }).then(r => r.json()).then(res => {
-      if (res.success) {
-        this.refreshAllData();
-      } else {
-        alert(res.error || 'Failed to update goal.');
-      }
-    });
+    this.openEditGoalModal(id);
   },
 
   deleteGoal: function(id) {
-    if (confirm('Delete this savings goal?')) {
-      fetch('/api/goals/' + id, { method: 'DELETE' }).then(() => this.refreshAllData());
-    }
+    this.openDeleteGoalModal(id);
   },
 
   // Calendar

@@ -6,7 +6,7 @@
 **Core Requirement:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/TASKS.md`  
 **Current Release Version:** `v0.8.1-beta` 
-**Test Suite Status:** 65/65 Tests Passing (`python3 -m unittest discover -s tests`)  
+**Test Suite Status:** 73/73 Tests Passing (`python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -39,8 +39,10 @@ gantt
     Diagnostics & Notifications         :done, p6_2, 2026-11-01, 2026-11-08
     section Phase 7: Money & Transactions
     Transfers, Balances & Edit GUI      :done, p7_1, 2026-11-08, 2026-11-08
+    section Phase 8: Savings Goals
+    Wallets, Deposits, Withdrawals & GUI:done, p8_1, 2026-11-08, 2026-11-08
     section Future Roadmap
-    Standalone OS Binaries (PyInstaller):p8_1, 2026-11-15, 14d
+    Standalone OS Binaries (PyInstaller):p9_1, 2026-11-15, 14d
 ```
 
 ### Milestone Progress Summary
@@ -55,6 +57,7 @@ gantt
 | **Phase 5** | Authentication, Settings & Air-Gap | **Completed (100%)** | Multi-profile username authentication, password hashing, local vendor bundling. |
 | **Phase 6** | Dashboard Analytics, Budget Limits, Alerts & Diagnostics | **Completed (100%)** | Account-wise filtering, Budget Manager Modal, Dynamic Insights, 5-point Diagnostics, Toast Stack. |
 | **Phase 7** | Money & Transactions Management | **Completed (100%)** | Account creation guard, wallet-to-wallet transfers, opening balance accuracy, custom transaction edit GUI, 65/65 tests passing. |
+| **Phase 8** | Savings Goals & Dedicated Wallets | **Completed (100%)** | Dedicated savings wallets, flexible Add/Withdraw money, non-destructive fund return on deletion, transfer integration, custom modals, 73/73 tests passing. |
 | **Backlog** | Standalone Desktop Packaging | **Planned** | Standalone PyInstaller / AppImage distribution. |
 
 ---
@@ -314,13 +317,45 @@ gantt
 
 ---
 
-## Phase 8 — Future Packaging & Distribution (Planned)
+## Phase 8 — Savings Goals: Dedicated Wallets, Deposits, Withdrawals & Transaction Integration (Completed)
 
-- [ ] **TASK-801: PyInstaller Standalone Windows Executable**
+- [x] **TASK-801: Dedicated Savings Wallet Generation on Goal Creation**
+  - **Description:** Implemented automatic creation of dedicated savings wallets (`accounts.account_type = 'wallet'`, `savings_goal_id`, `color = '#10b981'`) linked to each savings goal.
+  - **Verification:** Verified in `FinancialService.add_goal()`, `FinancialService._get_or_create_goal_wallet()`, and `tests/test_savings_goals_wallets.py`.
+- [x] **TASK-802: Safe Initial Deposit Funding & Over-Deduction Bounds Check**
+  - **Description:** Allows user to select an existing account to fund initial savings deposit. Validates available balance sufficiency and executes atomic transfer from source account to dedicated wallet. Goal creation without initial deposit does not deduct any funds.
+  - **Verification:** Verified in `FinancialService.add_goal()`, `templates/index.html`, and `tests/test_savings_goals_wallets.py`.
+- [x] **TASK-803: User-Controlled Deposit & Withdrawal with Balance Validation**
+  - **Description:** Replaced static initial deposit logic with flexible deposit and withdrawal functions. Enforces amount > 0, deposits <= available source balance, and withdrawals <= current savings balance.
+  - **Verification:** Verified in `FinancialService.deposit_goal()`, `FinancialService.withdraw_goal()`, and `tests/test_savings_goals_wallets.py`.
+- [x] **TASK-804: Safe Goal Deletion with Non-Destructive Remaining Funds Return**
+  - **Description:** Deleting a savings goal checks remaining savings wallet balance and returns funds to original funding account or user-selected destination account. Prevents accidental loss of money and safely deletes the dedicated wallet only after funds are preserved.
+  - **Verification:** Verified in `FinancialService.delete_goal()`, `templates/index.html`, and `tests/test_savings_goals_wallets.py`.
+- [x] **TASK-805: Complete Custom GUI Modals for Add Money, Withdraw, Edit, and Delete**
+  - **Description:** Replaced all browser-native `prompt()`, `alert()`, and `confirm()` dialogs with customized application modals (`#add-goal-money-modal`, `#withdraw-goal-money-modal`, `#edit-goal-modal`, `#delete-goal-modal`) featuring live balance badges, account dropdowns, validation messages, and toast notifications.
+  - **Verification:** Verified in `templates/index.html` and `static/js/app.js`.
+- [x] **TASK-806: Transaction Integration: Savings Movements Recorded as Transfers**
+  - **Description:** All goal deposits and withdrawals are recorded as `transfer` transactions (`type = 'transfer'`, `type_tag = 'savings'`) between account and goal wallet, ensuring they appear in Money & Transactions and are never counted as regular income or expenses.
+  - **Verification:** Verified in `FinancialService.deposit_goal()`, `FinancialService.withdraw_goal()`, `FinancialService.get_ledger_totals()`, and `tests/test_savings_goals_wallets.py`.
+- [x] **TASK-807: Real-Time Savings Goal Wallets Display in Accounts & Wallets**
+  - **Description:** Dedicated savings wallets are displayed directly in the Accounts & Wallets section with distinct `🎯 Goal:` badges, accurate inflow/outflow tallies, and direct quick-action buttons for Add Money, Withdraw, and Delete.
+  - **Verification:** Verified in `FinancialService.get_accounts()`, `static/js/app.js` (`renderAccounts`), and `templates/index.html`.
+- [x] **TASK-808: Real-Time Progress, Remaining Amount & Balance Synchronization**
+  - **Description:** Derives goal savings amounts and target progress percentages directly from dedicated wallet balances, preventing drift, double-counting, or stale caches.
+  - **Verification:** Verified in `FinancialService.get_goals()` and `static/js/app.js`.
+- [x] **TASK-809: Dedicated Savings Goals & Wallets Automated Test Suite (73/73 Tests Passing)**
+  - **Description:** Created comprehensive test suite `tests/test_savings_goals_wallets.py` containing 8 tests covering wallet creation, funding, deposits, withdrawals, deletion refunds, ledger isolation, and REST APIs. Full test suite achieves 73/73 passing tests.
+  - **Verification:** Verified via `python3 -m unittest discover -s tests`.
+
+---
+
+## Phase 9 — Future Packaging & Distribution (Planned)
+
+- [ ] **TASK-901: PyInstaller Standalone Windows Executable**
   - **Description:** Package MoneyTrack as a single-file portable `.exe` bundle for offline Windows execution.
   - **Priority:** Medium
   - **Dependencies:** None (App is fully functional via `python run.py`).
-- [ ] **TASK-802: Linux AppImage / Debian Package**
+- [ ] **TASK-902: Linux AppImage / Debian Package**
   - **Description:** Package MoneyTrack with desktop launcher integration for Linux workstations.
   - **Priority:** Medium
   - **Dependencies:** None.
