@@ -108,7 +108,7 @@ flowchart LR
 ├── templates/
 │   ├── index.html               # Authoritative single-page application UI matching reference
 │   └── report.html              # Printer-ready & PDF exportable monthly statement
-├── tests/                       # Automated test suite (73 tests, 100% pass)
+├── tests/                       # Automated test suite (86 tests, 100% pass across 11 suites)
 │   ├── test_accounts.py
 │   ├── test_api.py
 │   ├── test_calculators.py
@@ -118,6 +118,7 @@ flowchart LR
 │   ├── test_money_and_transactions.py
 │   ├── test_savings_goals_wallets.py
 │   ├── test_security_and_integrity.py
+│   ├── test_simulator_and_affordability.py
 │   └── test_username_auth.py
 ├── vendor/                      # Bundled offline Python package distribution (Flask, Jinja2, etc.)
 ├── AGENTS.md                    # AI coding agent instructions

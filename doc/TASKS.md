@@ -352,13 +352,39 @@ gantt
 
 ---
 
-## Phase 9 — Future Packaging & Distribution (Planned)
+## Phase 9 — Financial Planner & Affordability Engine: Fix Financial Logic, Improve UI/UX & Add Live Analytics (Completed)
 
-- [ ] **TASK-901: PyInstaller Standalone Windows Executable**
+- [x] **TASK-901: Review and Correct What-If Scenario Calculation Logic**
+  - **Description:** Corrected flawed lifetime aggregate math in `FinancialService.run_what_if_simulation()`. Built dynamic monthly baseline computation querying current/latest monthly income and expenses. Implemented 6 distinct simulation engines: Increase Monthly Expenses, Income Decreases, Save Fixed Monthly Extra, Purchase Expensive Item (one-time impact with replenishment projection), Reduce Category Spending, and Income Increases. Pure calculations with zero database mutations.
+  - **Verification:** Verified in `app/services/financial_service.py` and `tests/test_simulator_and_affordability.py`.
+- [x] **TASK-902: Overhaul "Check Before You Buy" Affordability Logic**
+  - **Description:** Implemented account-specific affordability checks via `FinancialService.evaluate_affordability()`. Enforces that money locked inside dedicated Savings Goal wallets (`savings_goal_id IS NOT NULL`) cannot be counted as free spending money, checks source account balance sufficiency, incorporates calendar recurring commitments due this month, evaluates category budget limits, and outputs simple, clear verdicts ("You can afford this.", "This purchase may affect your savings.", "This purchase exceeds your available balance.").
+  - **Verification:** Verified in `app/services/financial_service.py` and `tests/test_simulator_and_affordability.py`.
+- [x] **TASK-903: Fix UI Error – Green Highlight and Harmonize Color Indicators**
+  - **Description:** Fixed UI styling bug where green highlight was inappropriately displayed on warning or critical affordability statuses. Established a deterministic 3-tier color system across What-If and Affordability: Safe (Emerald/Green `#16a34a`), Warning (Amber `#d97706`), and Danger/Exceeded (Rose `#e11d48`).
+  - **Verification:** Verified in `templates/index.html` and `static/js/app.js` (`evaluateAffordability()`).
+- [x] **TASK-904: UI/UX Redesign and Naming Alignment**
+  - **Description:** Renamed all legacy components to user-friendly titles: Financial Simulator $\rightarrow$ **Financial Planner**, What-If Scenarios $\rightarrow$ **Try a Financial Scenario**, Can I Afford This? $\rightarrow$ **Check Before You Buy**. Polished form layouts with clear labels, helpful placeholders, responsive metric cards, and application-styled custom modals.
+  - **Verification:** Verified in `templates/index.html` and `static/js/app.js`.
+- [x] **TASK-905: Real-Time Dynamic Financial Data Integration**
+  - **Description:** Exposed `GET /api/simulate/baseline` to dynamically fetch live accounts, liquid reserves, committed expenses, and category budgets. Wired real-time updates upon account creation, transaction logging, and tab switching (`refreshAllData()`, `navigateTo('simulator')`).
+  - **Verification:** Verified in `app/routes/api.py`, `static/js/app.js`, and `tests/test_api.py`.
+- [x] **TASK-906: Live Chart.js Visual Projections & Dynamic View Modes**
+  - **Description:** Integrated offline Chart.js visualizations into the Financial Planner. Provided 12-Month Net Balance Projection line chart and Cash Flow / Reserve Breakdown bar charts with interactive mode toggle buttons (`Line Trend` vs `Bar Breakdown`), dynamic axis formatting, responsive height containers, and dark/light theme switching support.
+  - **Verification:** Verified in `static/js/app.js` (`renderScenarioChart`, `renderAffordChart`) and `templates/index.html`.
+- [x] **TASK-907: Dedicated Automated Test Suite & Multi-Scenario Edge Case Verification (86/86 Tests Passing)**
+  - **Description:** Created comprehensive test suite `tests/test_simulator_and_affordability.py` covering all 12 edge cases and financial situations, plus API endpoint testing in `tests/test_api.py`. The entire MoneyTrack test suite achieves 86/86 passing tests with zero errors.
+  - **Verification:** Verified via `python3 -m unittest discover -s tests` (Ran 86 tests, OK).
+
+---
+
+## Phase 10 — Future Packaging & Distribution (Planned)
+
+- [ ] **TASK-1001: PyInstaller Standalone Windows Executable**
   - **Description:** Package MoneyTrack as a single-file portable `.exe` bundle for offline Windows execution.
   - **Priority:** Medium
   - **Dependencies:** None (App is fully functional via `python run.py`).
-- [ ] **TASK-902: Linux AppImage / Debian Package**
+- [ ] **TASK-1002: Linux AppImage / Debian Package**
   - **Description:** Package MoneyTrack with desktop launcher integration for Linux workstations.
   - **Priority:** Medium
   - **Dependencies:** None.
