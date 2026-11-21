@@ -87,7 +87,23 @@ const MoneyTrackApp = {
     diagnosticsData: null,
     alertsData: [],
     dismissedAlertIds: new Set(),
-    activeNotifTab: 'alerts'
+    activeNotifTab: 'alerts',
+    calendarState: {
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      selectedDate: null,
+      accountId: 'ALL',
+      txType: 'all',
+      data: null
+    },
+    analyticsState: {
+      accountId: 'ALL',
+      monthYear: null,
+      trendMode: 'income',
+      data: null,
+      lineChart: null,
+      categoryChart: null
+    }
   },
 
   renderAppVersionInfo: function() {
@@ -138,7 +154,8 @@ const MoneyTrackApp = {
       this.renderAppVersionInfo();
       this.initTheme();
       this.initCalculators();
-      this.initChart();
+      this.initCalendar();
+      this.initAnalytics();
 
       // Tab visibility handling for real-time background notifications
       document.addEventListener('visibilitychange', () => {
@@ -600,6 +617,15 @@ const MoneyTrackApp = {
     if (this.state.lastAffordData) {
       this.renderAffordChart(this.state.lastAffordData);
     }
+    if (this.state.currentTab === 'analytics' && this.state.analyticsState.data) {
+      this.renderAnalyticsCharts(this.state.analyticsState.data);
+    }
+    if (this.state.currentTab === 'calendar' && this.state.calendarState.data) {
+      this.renderCalendarGrid(this.state.calendarState.data);
+      if (this.state.calendarState.selectedDate) {
+        this.renderCalendarSelectedDate(this.state.calendarState.selectedDate);
+      }
+    }
   },
 
   // Navigation
@@ -630,8 +656,11 @@ const MoneyTrackApp = {
     const drawer = document.getElementById('mobile-drawer');
     if (drawer) drawer.classList.add('hidden');
 
+    if (viewId === 'calendar') {
+      this.loadCalendarView();
+    }
     if (viewId === 'analytics') {
-      this.updateAnalyticsChart();
+      this.loadAnalyticsView();
     }
     if (viewId === 'simulator') {
       this.initSimulatorView();
@@ -698,6 +727,12 @@ const MoneyTrackApp = {
       this.renderAppVersionInfo();
       if (this.state.currentTab === 'simulator') {
         this.initSimulatorView();
+      }
+      if (this.state.currentTab === 'calendar') {
+        this.loadCalendarView();
+      }
+      if (this.state.currentTab === 'analytics') {
+        this.loadAnalyticsView();
       }
       this.hideInAppLoader();
 
@@ -1594,6 +1629,26 @@ const MoneyTrackApp = {
         filterSelect.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
       });
       filterSelect.value = curFilterVal;
+    }
+
+    const calAccFilter = document.getElementById('calendar-account-filter');
+    if (calAccFilter) {
+      const curCalVal = calAccFilter.value || 'ALL';
+      calAccFilter.innerHTML = '<option value="ALL">All Accounts & Wallets</option>';
+      this.state.accounts.forEach(acc => {
+        calAccFilter.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
+      });
+      calAccFilter.value = curCalVal;
+    }
+
+    const anaAccFilter = document.getElementById('analytics-account-filter');
+    if (anaAccFilter) {
+      const curAnaVal = anaAccFilter.value || 'ALL';
+      anaAccFilter.innerHTML = '<option value="ALL">All Accounts & Wallets</option>';
+      this.state.accounts.forEach(acc => {
+        anaAccFilter.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)} (${acc.type_label})</option>`;
+      });
+      anaAccFilter.value = curAnaVal;
     }
 
     if (formSelect) {
@@ -2732,47 +2787,276 @@ const MoneyTrackApp = {
     this.openDeleteGoalModal(id);
   },
 
-  // Calendar
-  renderCalendar: function() {
-    const container = document.getElementById('calendar-timeline-events');
+  // ==========================================
+  // MONEY CALENDAR (Redesigned & Real-Time)
+  // ==========================================
+  initCalendar: function() {
+    const today = new Date();
+    this.state.calendarState.year = today.getFullYear();
+    this.state.calendarState.month = today.getMonth() + 1;
+    this.state.calendarState.selectedDate = this.formatDateIso(today);
+  },
+
+  formatDateIso: function(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
+
+  loadCalendarView: function() {
+    const s = this.state.calendarState;
+    const url = `/api/calendar/month?year=${s.year}&month=${s.month}&account_id=${s.accountId || 'ALL'}&type=${s.txType || 'all'}`;
+
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        this.state.calendarState.data = data;
+        const curMonthEl = document.getElementById('cal-current-month-display');
+        if (curMonthEl) curMonthEl.textContent = `${data.month_name} ${data.year}`;
+
+        // Monthly Summary Badges
+        const incEl = document.getElementById('cal-month-income');
+        const expEl = document.getElementById('cal-month-expenses');
+        const netEl = document.getElementById('cal-month-net');
+        const cntEl = document.getElementById('cal-month-tx-count');
+
+        if (incEl) incEl.textContent = `+${data.currency}${Number(data.month_summary.income || 0).toLocaleString()}`;
+        if (expEl) expEl.textContent = `-${data.currency}${Number(data.month_summary.expenses || 0).toLocaleString()}`;
+        if (netEl) {
+          const net = Number(data.month_summary.net_cashflow || 0);
+          netEl.textContent = `${net >= 0 ? '+' : ''}${data.currency}${net.toLocaleString()}`;
+        }
+        if (cntEl) cntEl.textContent = String(data.month_summary.transaction_count || 0);
+
+        this.renderCalendarGrid(data);
+
+        // If no date selected or selected date is not in this month, select 1st or today
+        const todayStr = this.formatDateIso(new Date());
+        let dateToSelect = this.state.calendarState.selectedDate;
+        if (!dateToSelect || !dateToSelect.startsWith(data.month_year)) {
+          if (todayStr.startsWith(data.month_year)) {
+            dateToSelect = todayStr;
+          } else {
+            dateToSelect = `${data.month_year}-01`;
+          }
+        }
+        this.selectCalendarDate(dateToSelect);
+      })
+      .catch(err => {
+        console.error("Error loading calendar data:", err);
+      });
+  },
+
+  navigateCalendarMonth: function(delta) {
+    let y = this.state.calendarState.year;
+    let m = this.state.calendarState.month + delta;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    } else if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    this.state.calendarState.year = y;
+    this.state.calendarState.month = m;
+    this.loadCalendarView();
+  },
+
+  setCalendarToday: function() {
+    const today = new Date();
+    this.state.calendarState.year = today.getFullYear();
+    this.state.calendarState.month = today.getMonth() + 1;
+    this.state.calendarState.selectedDate = this.formatDateIso(today);
+    this.loadCalendarView();
+  },
+
+  onCalendarAccountChange: function(val) {
+    this.state.calendarState.accountId = val;
+    this.loadCalendarView();
+  },
+
+  onCalendarTypeChange: function(val) {
+    this.state.calendarState.txType = val;
+    this.loadCalendarView();
+  },
+
+  selectCalendarDate: function(dateStr) {
+    this.state.calendarState.selectedDate = dateStr;
+    const cells = document.querySelectorAll('.calendar-day-cell');
+    cells.forEach(c => {
+      if (c.getAttribute('data-date') === dateStr) {
+        c.classList.add('border-brand-500', 'bg-brand-50/50', 'dark:bg-brand-950/30', 'ring-1', 'ring-brand-500');
+        c.classList.remove('border-gray-100', 'dark:border-slate-800');
+      } else {
+        c.classList.remove('border-brand-500', 'bg-brand-50/50', 'dark:bg-brand-950/30', 'ring-1', 'ring-brand-500');
+        c.classList.add('border-gray-100', 'dark:border-slate-800');
+      }
+    });
+
+    this.renderCalendarSelectedDate(dateStr);
+  },
+
+  renderCalendarGrid: function(data) {
+    const container = document.getElementById('calendar-grid-cells');
     if (!container) return;
     container.innerHTML = '';
 
-    let upcomingInc = 0;
-    let upcomingExp = 0;
+    const todayStr = this.formatDateIso(new Date());
 
-    this.state.calendarEvents.forEach(ev => {
-      const isInc = ev.type === 'income';
-      if (isInc) upcomingInc += ev.amount;
-      else upcomingExp += ev.amount;
+    // 1. Padding days for Sunday-first calendar
+    for (let i = 0; i < data.first_weekday; i++) {
+      container.innerHTML += `<div class="h-16 sm:h-20 p-1 rounded-xl bg-gray-50/30 dark:bg-slate-900/20 border border-transparent opacity-30"></div>`;
+    }
 
-      const iconColor = isInc ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/30' : 'text-accent-rose bg-accent-rose/10';
-      const sign = isInc ? '+' : '-';
+    // 2. Days in month
+    for (let day = 1; day <= data.total_days; day++) {
+      const dateKey = `${data.month_year}-${String(day).padStart(2, '0')}`;
+      const dayData = data.days[dateKey] || { income: 0, expenses: 0, incoming_transfers: 0, outgoing_transfers: 0, transaction_count: 0, transactions: [], events: [] };
+      const isToday = dateKey === todayStr;
+      const isSelected = dateKey === this.state.calendarState.selectedDate;
+
+      const inc = dayData.income || 0;
+      const exp = dayData.expenses || 0;
+      const xfer = (dayData.incoming_transfers || 0) + (dayData.outgoing_transfers || 0);
+      const evCount = (dayData.events || []).length;
+      const txCount = dayData.transaction_count || 0;
+
+      let actHtml = '';
+      if (inc > 0) {
+        const fmtInc = inc >= 1000 ? `+₹${(inc / 1000).toFixed(1)}k` : `+₹${inc}`;
+        actHtml += `<div class="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 truncate flex items-center space-x-0.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span><span class="truncate">${fmtInc}</span></div>`;
+      }
+      if (exp > 0) {
+        const fmtExp = exp >= 1000 ? `-₹${(exp / 1000).toFixed(1)}k` : `-₹${exp}`;
+        actHtml += `<div class="text-[9px] font-bold text-rose-600 dark:text-rose-400 truncate flex items-center space-x-0.5"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span><span class="truncate">${fmtExp}</span></div>`;
+      }
+      if (xfer > 0) {
+        actHtml += `<div class="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400 truncate flex items-center space-x-0.5"><span class="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span><span>↔ Transfer</span></div>`;
+      }
+      if (evCount > 0 && inc === 0 && exp === 0) {
+        actHtml += `<div class="text-[9px] font-semibold text-amber-600 dark:text-amber-400 truncate flex items-center space-x-0.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span><span>Planned</span></div>`;
+      }
+
+      const todayBorder = isToday ? 'ring-2 ring-brand-500/80 font-black' : '';
+      const selectedClass = isSelected ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/30 ring-1 ring-brand-500' : 'border-gray-100 dark:border-slate-800';
 
       container.innerHTML += `
-        <div class="p-3.5 rounded-xl border border-gray-200 dark:border-slate-800 flex items-center justify-between text-xs">
-          <div class="flex items-center space-x-3">
-            <div class="p-2 rounded-lg ${iconColor}">
-              <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            </div>
-            <div>
-              <span class="font-bold text-slate-900 dark:text-white block">${ev.title}</span>
-              <span class="text-slate-400 text-[11px]">${ev.date}</span>
-            </div>
+        <div onclick="MoneyTrackApp.selectCalendarDate('${dateKey}')" data-date="${dateKey}" class="calendar-day-cell h-16 sm:h-20 p-1.5 sm:p-2 rounded-xl bg-white dark:bg-slate-900/80 border ${selectedClass} ${todayBorder} hover:border-brand-300 dark:hover:border-brand-700 cursor-pointer flex flex-col justify-between transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs ${isToday ? 'font-black text-brand-600 dark:text-brand-400' : 'font-semibold text-slate-800 dark:text-slate-200'}">${day}</span>
+            ${txCount > 1 ? `<span class="text-[8px] font-bold px-1 rounded-full bg-gray-100 dark:bg-slate-800 text-slate-500">${txCount}</span>` : ''}
           </div>
-          <div class="flex items-center space-x-3">
-            <span class="font-bold ${isInc ? 'text-brand-600' : 'text-slate-900 dark:text-white'}">${sign}${this.state.user.currency}${ev.amount.toLocaleString()}</span>
-            <button onclick="MoneyTrackApp.deleteCalendarEvent('${ev.id}')" class="p-1 text-slate-400 hover:text-accent-rose">
-              <svg class="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-            </button>
+          <div class="space-y-0.5 overflow-hidden">
+            ${actHtml}
           </div>
         </div>
       `;
-    });
+    }
+  },
 
-    const projected = Math.max(0, upcomingInc - upcomingExp);
-    const projEl = document.getElementById('cal-projected-end');
-    if (projEl) projEl.textContent = projected.toLocaleString();
+  renderCalendarSelectedDate: function(dateStr) {
+    const data = this.state.calendarState.data;
+    if (!data) return;
+
+    const dayObj = (data.days && data.days[dateStr]) || {
+      date: dateStr,
+      day_name: '',
+      income: 0,
+      expenses: 0,
+      incoming_transfers: 0,
+      outgoing_transfers: 0,
+      transaction_count: 0,
+      transactions: [],
+      events: []
+    };
+
+    let formattedDate = dateStr;
+    try {
+      const dtParts = dateStr.split('-');
+      const dt = new Date(parseInt(dtParts[0]), parseInt(dtParts[1]) - 1, parseInt(dtParts[2]));
+      formattedDate = dt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    } catch (e) {
+      formattedDate = dateStr;
+    }
+
+    const titleEl = document.getElementById('cal-selected-date-title');
+    const badgeEl = document.getElementById('cal-selected-count-badge');
+    const incEl = document.getElementById('cal-selected-income');
+    const expEl = document.getElementById('cal-selected-expenses');
+    const inXferEl = document.getElementById('cal-selected-in-transfers');
+    const outXferEl = document.getElementById('cal-selected-out-transfers');
+
+    if (titleEl) titleEl.textContent = formattedDate;
+    if (badgeEl) badgeEl.textContent = `${dayObj.transaction_count || 0} transactions`;
+    if (incEl) incEl.textContent = `+${data.currency}${(dayObj.income || 0).toLocaleString()}`;
+    if (expEl) expEl.textContent = `-${data.currency}${(dayObj.expenses || 0).toLocaleString()}`;
+    if (inXferEl) inXferEl.textContent = `${data.currency}${(dayObj.incoming_transfers || 0).toLocaleString()}`;
+    if (outXferEl) outXferEl.textContent = `${data.currency}${(dayObj.outgoing_transfers || 0).toLocaleString()}`;
+
+    // Render Transaction List
+    const txContainer = document.getElementById('cal-selected-tx-list');
+    if (txContainer) {
+      txContainer.innerHTML = '';
+      if (!dayObj.transactions || dayObj.transactions.length === 0) {
+        txContainer.innerHTML = `<div class="p-6 text-center text-slate-400 text-xs">No transactions recorded for this date.</div>`;
+      } else {
+        dayObj.transactions.forEach(t => {
+          const isInc = t.type === 'income';
+          const isXfer = t.type === 'transfer';
+          const amtClass = isInc ? 'text-emerald-600 dark:text-emerald-400' : (isXfer ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-600 dark:text-rose-400');
+          const prefix = isInc ? '+' : (isXfer ? '↔ ' : '-');
+
+          let routeText = this.escapeHtml(t.account_name);
+          if (isXfer && t.destination_account_name) {
+            routeText = `${this.escapeHtml(t.account_name)} → ${this.escapeHtml(t.destination_account_name)}`;
+          }
+
+          txContainer.innerHTML += `
+            <div class="p-2.5 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50 flex items-center justify-between text-xs">
+              <div class="flex items-center space-x-2.5 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${t.category_color || '#3b82f6'};"></span>
+                <div class="min-w-0">
+                  <span class="font-bold text-slate-900 dark:text-white block truncate">${this.escapeHtml(t.description)}</span>
+                  <span class="text-[11px] text-slate-400 block truncate">${routeText} • <span class="capitalize">${t.category_name}</span></span>
+                </div>
+              </div>
+              <div class="text-right shrink-0 ml-2">
+                <span class="font-bold ${amtClass}">${prefix}${data.currency}${Number(t.amount).toLocaleString()}</span>
+                <span class="block text-[9px] uppercase font-semibold text-slate-400">${t.type_tag || t.type}</span>
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    // Render Scheduled Events
+    const evSection = document.getElementById('cal-selected-events-section');
+    const evList = document.getElementById('cal-selected-events-list');
+    if (evSection && evList) {
+      if (dayObj.events && dayObj.events.length > 0) {
+        evSection.classList.remove('hidden');
+        evList.innerHTML = '';
+        dayObj.events.forEach(ev => {
+          evList.innerHTML += `
+            <div class="p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-950/20 flex items-center justify-between text-xs">
+              <div>
+                <span class="font-bold text-slate-900 dark:text-white block">${this.escapeHtml(ev.title)}</span>
+                <span class="text-[10px] text-amber-600 dark:text-amber-400 capitalize">${ev.frequency} Scheduled ${ev.type}</span>
+              </div>
+              <span class="font-bold text-slate-900 dark:text-white">${data.currency}${Number(ev.amount).toLocaleString()}</span>
+            </div>
+          `;
+        });
+      } else {
+        evSection.classList.add('hidden');
+      }
+    }
+  },
+
+  renderCalendar: function() {
+    this.loadCalendarView();
   },
 
   submitCalendarForm: function(e) {
@@ -3677,40 +3961,381 @@ const MoneyTrackApp = {
     reader.readAsText(file);
   },
 
-  // Chart.js initialization for offline analytics
-  initChart: function() {
-    const ctx = document.getElementById('analytics-chart-canvas');
-    if (ctx && typeof Chart !== 'undefined') {
-      this.analyticsChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['Food', 'Transport', 'Shopping', 'Bills', 'Salary'],
-          datasets: [{
-            label: 'Actual Spending (₹)',
-            data: [6440, 3680, 4600, 1800, 25000],
-            backgroundColor: ['#3b82f6', '#8b5cf6', '#f43f5e', '#f59e0b', '#22c55e'],
-            borderRadius: 8
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false }
-          },
-          scales: {
-            y: { grid: { color: 'rgba(156, 163, 175, 0.1)' } },
-            x: { grid: { display: false } }
-          }
-        }
-      });
+  // ==========================================
+  // REAL-TIME ANALYTICS & FINANCIAL TRENDS
+  // ==========================================
+  initAnalytics: function() {
+    // Populate month filter dropdown with past 12 months
+    const monthSelect = document.getElementById('analytics-month-filter');
+    if (monthSelect) {
+      monthSelect.innerHTML = '';
+      const today = new Date();
+      let cur = new Date(today.getFullYear(), today.getMonth(), 1);
+      for (let i = 0; i < 12; i++) {
+        const y = cur.getFullYear();
+        const m = String(cur.getMonth() + 1).padStart(2, '0');
+        const mKey = `${y}-${m}`;
+        const lbl = cur.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        monthSelect.innerHTML += `<option value="${mKey}">${lbl}${i === 0 ? ' (Current)' : ''}</option>`;
+        cur.setMonth(cur.getMonth() - 1);
+      }
     }
   },
 
-  updateAnalyticsChart: function() {
-    if (this.analyticsChart) {
-      this.analyticsChart.update();
+  onAnalyticsFilterChange: function() {
+    const accEl = document.getElementById('analytics-account-filter');
+    const monthEl = document.getElementById('analytics-month-filter');
+    if (accEl) this.state.analyticsState.accountId = accEl.value;
+    if (monthEl) this.state.analyticsState.monthYear = monthEl.value;
+    this.loadAnalyticsView();
+  },
+
+  setAnalyticsTrendMode: function(mode) {
+    this.state.analyticsState.trendMode = mode;
+    document.querySelectorAll('.trend-mode-btn').forEach(btn => {
+      btn.classList.remove('bg-white', 'dark:bg-slate-800', 'text-brand-600', 'dark:text-brand-400', 'shadow-sm');
+      btn.classList.add('text-slate-600', 'dark:text-slate-400');
+    });
+
+    const activeBtn = document.getElementById(`btn-trend-${mode}`);
+    if (activeBtn) {
+      activeBtn.classList.remove('text-slate-600', 'dark:text-slate-400');
+      activeBtn.classList.add('bg-white', 'dark:bg-slate-800', 'text-brand-600', 'dark:text-brand-400', 'shadow-sm');
     }
+
+    if (this.state.analyticsState.data) {
+      this.renderAnalyticsTrendLineChart(this.state.analyticsState.data);
+    }
+  },
+
+  loadAnalyticsView: function() {
+    const s = this.state.analyticsState;
+    const url = `/api/analytics/summary?account_id=${s.accountId || 'ALL'}&month_year=${s.monthYear || ''}`;
+
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        this.state.analyticsState.data = data;
+        const cur = data.currency || '₹';
+
+        // 1. KPI Cards
+        const incEl = document.getElementById('analytics-kpi-income');
+        const incDeltaEl = document.getElementById('analytics-kpi-income-delta');
+        const expEl = document.getElementById('analytics-kpi-expenses');
+        const expDeltaEl = document.getElementById('analytics-kpi-expense-delta');
+        const netEl = document.getElementById('analytics-kpi-net');
+        const netDeltaEl = document.getElementById('analytics-kpi-net-delta');
+        const savRateEl = document.getElementById('analytics-kpi-savings-rate');
+        const savEl = document.getElementById('analytics-kpi-savings');
+
+        if (incEl) incEl.textContent = Number(data.current.income || 0).toLocaleString();
+        if (incDeltaEl) {
+          const d = data.delta.income || 0;
+          const pct = data.delta.income_pct || 0;
+          incDeltaEl.textContent = `vs last month: ${d >= 0 ? '+' : ''}${cur}${d.toLocaleString()} (${pct >= 0 ? '+' : ''}${pct}%)`;
+          incDeltaEl.className = d >= 0 ? 'text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block' : 'text-[11px] font-semibold text-slate-500 block';
+        }
+
+        if (expEl) expEl.textContent = Number(data.current.expenses || 0).toLocaleString();
+        if (expDeltaEl) {
+          const d = data.delta.expenses || 0;
+          const pct = data.delta.expenses_pct || 0;
+          expDeltaEl.textContent = `vs last month: ${d >= 0 ? '+' : ''}${cur}${d.toLocaleString()} (${pct >= 0 ? '+' : ''}${pct}%)`;
+          expDeltaEl.className = d <= 0 ? 'text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block' : 'text-[11px] font-semibold text-rose-600 dark:text-rose-400 block';
+        }
+
+        if (netEl) netEl.textContent = Number(data.current.net_cashflow || 0).toLocaleString();
+        if (netDeltaEl) {
+          const net = data.current.net_cashflow || 0;
+          netDeltaEl.textContent = net >= 0 ? 'Positive Net Cashflow' : 'Negative Net Cashflow (Deficit)';
+          netDeltaEl.className = net >= 0 ? 'text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block' : 'text-[11px] font-semibold text-rose-600 dark:text-rose-400 block';
+        }
+
+        if (savRateEl) savRateEl.textContent = `${data.current.savings_rate || 0}%`;
+        if (savEl) {
+          const s = data.current.savings || 0;
+          const spct = data.delta.savings_pct || 0;
+          savEl.textContent = `Savings: ${cur}${s.toLocaleString()} (${spct >= 0 ? '+' : ''}${spct}%)`;
+        }
+
+        // 2. 50/30/20 Necessary vs Optional
+        const r = data.ratio_50_30_20;
+        const necEl = document.getElementById('analytics-needs-text');
+        const optEl = document.getElementById('analytics-wants-text');
+        const necBar = document.getElementById('analytics-needs-bar');
+        const optBar = document.getElementById('analytics-wants-bar');
+        const periodEl = document.getElementById('analytics-50-30-20-period');
+
+        if (periodEl) periodEl.textContent = `${data.current_month_label}`;
+        if (necEl) necEl.textContent = `Necessary Needs: ${r.necessary_pct}% (${cur}${Number(r.necessary_rupees || 0).toLocaleString()})`;
+        if (optEl) optEl.textContent = `Optional Wants: ${r.optional_pct}% (${cur}${Number(r.optional_rupees || 0).toLocaleString()})`;
+        if (necBar) necBar.style.width = `${r.necessary_pct}%`;
+        if (optBar) optBar.style.width = `${r.optional_pct}%`;
+
+        // 3. "What Changed?" English Summary Banner & Pills
+        const bannerEl = document.getElementById('analytics-mom-summary-banner');
+        const momSubEl = document.getElementById('analytics-mom-subtitle');
+        if (momSubEl) momSubEl.textContent = `Comparing ${data.current_month_label} vs ${data.previous_month_label}`;
+
+        if (bannerEl) {
+          const incDelta = data.delta.income;
+          const expDelta = data.delta.expenses;
+          const incText = incDelta > 0 ? `Income increased by ${cur}${incDelta.toLocaleString()} (${data.delta.income_pct}%)` : (incDelta < 0 ? `Income decreased by ${cur}${Math.abs(incDelta).toLocaleString()} (${Math.abs(data.delta.income_pct)}%)` : `Income remained unchanged`);
+          const expText = expDelta > 0 ? `Expenses increased by ${cur}${expDelta.toLocaleString()} (${data.delta.expenses_pct}%)` : (expDelta < 0 ? `Expenses decreased by ${cur}${Math.abs(expDelta).toLocaleString()} (${Math.abs(data.delta.expenses_pct)}%)` : `Expenses remained unchanged`);
+          bannerEl.textContent = `${incText}. ${expText}.`;
+        }
+
+        const momIncPill = document.getElementById('mom-income-pill');
+        const momExpPill = document.getElementById('mom-expense-pill');
+        const momSavPill = document.getElementById('mom-savings-pill');
+        const momNetPill = document.getElementById('mom-net-pill');
+
+        if (momIncPill) momIncPill.textContent = `${data.delta.income >= 0 ? '+' : ''}${cur}${Number(data.delta.income).toLocaleString()} (${data.delta.income_pct >= 0 ? '+' : ''}${data.delta.income_pct}%)`;
+        if (momExpPill) momExpPill.textContent = `${data.delta.expenses >= 0 ? '+' : ''}${cur}${Number(data.delta.expenses).toLocaleString()} (${data.delta.expenses_pct >= 0 ? '+' : ''}${data.delta.expenses_pct}%)`;
+        if (momSavPill) momSavPill.textContent = `${data.delta.savings >= 0 ? '+' : ''}${cur}${Number(data.delta.savings).toLocaleString()} (${data.delta.savings_pct >= 0 ? '+' : ''}${data.delta.savings_pct}%)`;
+        if (momNetPill) momNetPill.textContent = `${data.delta.net_cashflow >= 0 ? '+' : ''}${cur}${Number(data.delta.net_cashflow).toLocaleString()}`;
+
+        // 4. MoM Category Spending Table
+        const momTable = document.getElementById('analytics-mom-table-body');
+        if (momTable) {
+          momTable.innerHTML = '';
+          const cats = data.category_deltas || [];
+          if (cats.length === 0) {
+            momTable.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400">No category spending records found for this period.</td></tr>`;
+          } else {
+            cats.forEach(c => {
+              const dAmt = c.delta;
+              const dPct = c.delta_pct;
+              const isUp = dAmt > 0;
+              const isDown = dAmt < 0;
+              const deltaColor = isDown ? 'text-emerald-600 dark:text-emerald-400' : (isUp ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500');
+              const trendBadge = isDown
+                ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">Decreased</span>`
+                : (isUp
+                  ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">Increased</span>`
+                  : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Unchanged</span>`);
+
+              momTable.innerHTML += `
+                <tr>
+                  <td class="py-2.5 flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${c.color};"></span>
+                    <span class="font-bold text-slate-900 dark:text-white">${this.escapeHtml(c.name)}</span>
+                  </td>
+                  <td class="py-2.5 text-slate-500">${cur}${Number(c.last_month).toLocaleString()}</td>
+                  <td class="py-2.5 text-slate-900 dark:text-white font-semibold">${cur}${Number(c.this_month).toLocaleString()}</td>
+                  <td class="py-2.5 font-bold ${deltaColor}">${dAmt >= 0 ? '+' : ''}${cur}${Number(dAmt).toLocaleString()} (${dPct >= 0 ? '+' : ''}${dPct}%)</td>
+                  <td class="py-2.5 text-right">${trendBadge}</td>
+                </tr>
+              `;
+            });
+          }
+        }
+
+        // 5. Render Charts
+        this.renderAnalyticsCharts(data);
+      })
+      .catch(err => {
+        console.error("Error loading analytics summary:", err);
+      });
+  },
+
+  renderAnalyticsCharts: function(data) {
+    this.renderCategoryExpenseChart(data);
+    this.renderAnalyticsTrendLineChart(data);
+  },
+
+  renderCategoryExpenseChart: function(data) {
+    const ctx = document.getElementById('analytics-chart-canvas');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    if (this.state.analyticsState.categoryChart) {
+      this.state.analyticsState.categoryChart.destroy();
+      this.state.analyticsState.categoryChart = null;
+    }
+
+    const categories = data.category_spending || [];
+    const breakdownEl = document.getElementById('analytics-category-breakdown');
+    if (breakdownEl) {
+      breakdownEl.innerHTML = '';
+      if (categories.length === 0) {
+        breakdownEl.innerHTML = `<div class="p-4 text-center text-slate-400 text-xs">No category expenses recorded for ${data.current_month_label}.</div>`;
+      } else {
+        categories.forEach(c => {
+          breakdownEl.innerHTML += `
+            <div class="p-2.5 rounded-xl border border-gray-100 dark:border-slate-800 flex items-center justify-between text-xs">
+              <div class="flex items-center space-x-2">
+                <span class="w-3 h-3 rounded-full shrink-0" style="background-color: ${c.color};"></span>
+                <span class="font-semibold text-slate-800 dark:text-slate-200">${this.escapeHtml(c.name)}</span>
+              </div>
+              <div class="text-right">
+                <span class="font-bold text-slate-900 dark:text-white">${data.currency}${Number(c.spent).toLocaleString()}</span>
+                <span class="text-[10px] text-slate-400 block">${c.percentage}%</span>
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    const labels = categories.length > 0 ? categories.map(c => c.name) : ['No Expenses'];
+    const values = categories.length > 0 ? categories.map(c => c.spent) : [1];
+    const colors = categories.length > 0 ? categories.map(c => c.color || '#3b82f6') : ['#94a3b8'];
+
+    this.state.analyticsState.categoryChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderWidth: 2,
+          borderColor: this.state.theme === 'dark' ? '#090d16' : '#ffffff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(item) {
+                if (categories.length === 0) return 'No Expenses Logged';
+                return ` ${item.label}: ${data.currency}${item.raw.toLocaleString()}`;
+              }
+            }
+          }
+        },
+        cutout: '68%'
+      }
+    });
+  },
+
+  renderAnalyticsTrendLineChart: function(data) {
+    const ctx = document.getElementById('analytics-trend-line-chart');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    if (this.state.analyticsState.lineChart) {
+      this.state.analyticsState.lineChart.destroy();
+      this.state.analyticsState.lineChart = null;
+    }
+
+    const mode = this.state.analyticsState.trendMode || 'income';
+    const isDark = this.state.theme === 'dark';
+    const gridColor = isDark ? 'rgba(51, 65, 85, 0.25)' : 'rgba(226, 232, 240, 0.8)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+    let chartData = {};
+    if (mode === 'comparison') {
+      const daily = data.daily_comparison || [];
+      chartData = {
+        labels: daily.map(d => `Day ${d.day}`),
+        datasets: [
+          {
+            label: `${data.current_month_label} Cumulative (₹)`,
+            data: daily.map(d => d.cum_curr_expense),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2.5,
+            pointRadius: 2
+          },
+          {
+            label: `${data.previous_month_label} Cumulative (₹)`,
+            data: daily.map(d => d.cum_prev_expense),
+            borderColor: '#94a3b8',
+            borderDash: [5, 5],
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.3,
+            borderWidth: 2,
+            pointRadius: 1
+          }
+        ]
+      };
+    } else {
+      const history = data.trend_history || [];
+      let label = 'Monthly Income (₹)';
+      let color = '#10b981';
+      let bg = 'rgba(16, 185, 129, 0.1)';
+      let values = history.map(h => h.income);
+
+      if (mode === 'expense') {
+        label = 'Monthly Expenses (₹)';
+        color = '#f43f5e';
+        bg = 'rgba(244, 63, 94, 0.1)';
+        values = history.map(h => h.expenses);
+      } else if (mode === 'savings') {
+        label = 'Monthly Savings (₹)';
+        color = '#3b82f6';
+        bg = 'rgba(59, 130, 246, 0.1)';
+        values = history.map(h => h.savings);
+      }
+
+      chartData = {
+        labels: history.map(h => h.label),
+        datasets: [{
+          label: label,
+          data: values,
+          borderColor: color,
+          backgroundColor: bg,
+          fill: true,
+          tension: 0.35,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointBackgroundColor: color
+        }]
+      };
+    }
+
+    this.state.analyticsState.lineChart = new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { color: textColor, boxWidth: 12, font: { size: 11, weight: 'bold' } }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(item) {
+                return ` ${item.dataset.label}: ${data.currency}${Number(item.raw).toLocaleString()}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: textColor, font: { size: 10 } }
+          },
+          y: {
+            grid: { color: gridColor },
+            ticks: {
+              color: textColor,
+              font: { size: 10 },
+              callback: function(v) {
+                if (v >= 1000) return `${data.currency}${(v / 1000).toFixed(0)}k`;
+                return `${data.currency}${v}`;
+              }
+            }
+          }
+        }
+      }
+    });
+  },
+
+  initChart: function() {
+    this.initAnalytics();
+  },
+
+  updateAnalyticsChart: function() {
+    this.loadAnalyticsView();
   },
 
   // Modals

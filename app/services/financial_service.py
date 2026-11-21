@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 import datetime
+import calendar
 import os
 import sys
 
@@ -1494,6 +1495,433 @@ class FinancialService:
             with conn:
                 conn.execute("DELETE FROM calendar_events WHERE id = ? AND profile_id = ?;", (event_id, profile_id))
             return True
+        finally:
+            conn.close()
+
+    def get_calendar_data(self, profile_id=1, year=None, month=None, account_id=None, tx_type=None):
+        """
+        Retrieves real-time calendar information for a given month and year.
+        - Fetches actual income, expenses, and transfers from the transactions ledger.
+        - Computes daily total income, expenses, and incoming/outgoing transfers.
+        - Provides complete transaction details for every day.
+        - Incorporates scheduled cashflow events from calendar_events.
+        - Supports account-wise and wallet-wise filtering, plus transaction type filtering.
+        - Handles empty history safely without crashing.
+        """
+        today = datetime.date.today()
+        try:
+            year = int(year) if year is not None else today.year
+        except (ValueError, TypeError):
+            year = today.year
+
+        try:
+            month = int(month) if month is not None else today.month
+        except (ValueError, TypeError):
+            month = today.month
+
+        if month < 1:
+            month = 1
+        elif month > 12:
+            month = 12
+
+        month_str = f"{year:04d}-{month:02d}"
+        first_weekday, total_days = calendar.monthrange(year, month)
+        # Convert first_weekday (0=Mon..6=Sun) to Sunday-first index (0=Sun..6=Sat)
+        sun_first_weekday = (first_weekday + 1) % 7
+
+        user = self.get_user_profile(profile_id)
+        curr = user.get('currency', '₹') if user else '₹'
+
+        conn = self._get_conn()
+        try:
+            # 1. Fetch transactions for this profile and month
+            query = """
+                SELECT t.id, t.date, t.description, t.amount_paise, t.type, t.type_tag,
+                       t.category_id, c.name as category_name, c.color as category_color, c.icon as category_icon,
+                       t.account_id, a.name as account_name, a.color as account_color, a.account_type,
+                       t.destination_account_id, da.name as destination_account_name, da.color as destination_account_color,
+                       da.account_type as destination_account_type
+                FROM transactions t
+                LEFT JOIN categories c ON t.category_id = c.id
+                LEFT JOIN accounts a ON t.account_id = a.id
+                LEFT JOIN accounts da ON t.destination_account_id = da.id
+                WHERE t.profile_id = ? AND strftime('%Y-%m', t.date) = ?
+            """
+            params = [profile_id, month_str]
+
+            if account_id and str(account_id) != 'ALL' and str(account_id).lower() != 'null':
+                aid = int(account_id)
+                query += " AND (t.account_id = ? OR t.destination_account_id = ?)"
+                params.extend([aid, aid])
+
+            if tx_type and tx_type in ('income', 'expense', 'transfer'):
+                query += " AND t.type = ?"
+                params.append(tx_type)
+
+            query += " ORDER BY t.date ASC, t.id ASC;"
+            tx_rows = conn.execute(query, params).fetchall()
+
+            # 2. Fetch scheduled events
+            cal_query = """
+                SELECT id, title, amount_paise, type, due_date, frequency, status
+                FROM calendar_events
+                WHERE profile_id = ? AND strftime('%Y-%m', due_date) = ?
+                ORDER BY due_date ASC;
+            """
+            cal_rows = conn.execute(cal_query, (profile_id, month_str)).fetchall()
+
+            # Structure days_dict
+            days_dict = {}
+            for day in range(1, total_days + 1):
+                date_key = f"{year:04d}-{month:02d}-{day:02d}"
+                dt = datetime.date(year, month, day)
+                days_dict[date_key] = {
+                    'day': day,
+                    'date': date_key,
+                    'day_name': calendar.day_name[dt.weekday()],
+                    'day_abbr': calendar.day_abbr[dt.weekday()],
+                    'income_paise': 0,
+                    'expenses_paise': 0,
+                    'incoming_transfers_paise': 0,
+                    'outgoing_transfers_paise': 0,
+                    'income': 0,
+                    'expenses': 0,
+                    'incoming_transfers': 0,
+                    'outgoing_transfers': 0,
+                    'transaction_count': 0,
+                    'transactions': [],
+                    'events': []
+                }
+
+            month_income_paise = 0
+            month_expenses_paise = 0
+            month_incoming_transfers_paise = 0
+            month_outgoing_transfers_paise = 0
+            month_tx_count = 0
+
+            for r in tx_rows:
+                d_str = r['date']
+                if d_str in days_dict:
+                    d_obj = days_dict[d_str]
+                    amt_paise = r['amount_paise']
+                    t_type = r['type']
+                    amt_rupees = paise_to_rupees(amt_paise)
+
+                    tx_item = {
+                        'id': str(r['id']),
+                        'date': d_str,
+                        'description': r['description'],
+                        'amount': amt_rupees,
+                        'amount_paise': amt_paise,
+                        'type': t_type,
+                        'type_tag': r['type_tag'],
+                        'category_id': r['category_id'],
+                        'category_name': r['category_name'] or 'General',
+                        'category_color': r['category_color'] or '#3b82f6',
+                        'category_icon': r['category_icon'] or 'tag',
+                        'account_id': str(r['account_id']) if r['account_id'] else None,
+                        'account_name': r['account_name'] or 'Account',
+                        'account_color': r['account_color'] or '#3b82f6',
+                        'account_type': r['account_type'] or 'savings',
+                        'destination_account_id': str(r['destination_account_id']) if r['destination_account_id'] else None,
+                        'destination_account_name': r['destination_account_name'],
+                        'destination_account_color': r['destination_account_color']
+                    }
+                    d_obj['transactions'].append(tx_item)
+                    d_obj['transaction_count'] += 1
+                    month_tx_count += 1
+
+                    if t_type == 'income':
+                        d_obj['income_paise'] += amt_paise
+                        month_income_paise += amt_paise
+                    elif t_type == 'expense':
+                        d_obj['expenses_paise'] += amt_paise
+                        month_expenses_paise += amt_paise
+                    elif t_type == 'transfer':
+                        if account_id and str(account_id) != 'ALL':
+                            aid = int(account_id)
+                            if r['destination_account_id'] == aid:
+                                d_obj['incoming_transfers_paise'] += amt_paise
+                                month_incoming_transfers_paise += amt_paise
+                            if r['account_id'] == aid:
+                                d_obj['outgoing_transfers_paise'] += amt_paise
+                                month_outgoing_transfers_paise += amt_paise
+                        else:
+                            d_obj['incoming_transfers_paise'] += amt_paise
+                            d_obj['outgoing_transfers_paise'] += amt_paise
+                            month_incoming_transfers_paise += amt_paise
+                            month_outgoing_transfers_paise += amt_paise
+
+            for r in cal_rows:
+                d_str = r['due_date']
+                if d_str in days_dict:
+                    days_dict[d_str]['events'].append({
+                        'id': str(r['id']),
+                        'title': r['title'],
+                        'amount': paise_to_rupees(r['amount_paise']),
+                        'type': r['type'],
+                        'frequency': r['frequency'],
+                        'status': r['status']
+                    })
+
+            for d_key, d_obj in days_dict.items():
+                d_obj['income'] = paise_to_rupees(d_obj['income_paise'])
+                d_obj['expenses'] = paise_to_rupees(d_obj['expenses_paise'])
+                d_obj['incoming_transfers'] = paise_to_rupees(d_obj['incoming_transfers_paise'])
+                d_obj['outgoing_transfers'] = paise_to_rupees(d_obj['outgoing_transfers_paise'])
+
+            month_net_paise = month_income_paise - month_expenses_paise
+
+            return {
+                'year': year,
+                'month': month,
+                'month_name': calendar.month_name[month],
+                'month_year': month_str,
+                'first_weekday': sun_first_weekday,
+                'total_days': total_days,
+                'currency': curr,
+                'month_summary': {
+                    'income': paise_to_rupees(month_income_paise),
+                    'expenses': paise_to_rupees(month_expenses_paise),
+                    'net_cashflow': paise_to_rupees(month_net_paise),
+                    'incoming_transfers': paise_to_rupees(month_incoming_transfers_paise),
+                    'outgoing_transfers': paise_to_rupees(month_outgoing_transfers_paise),
+                    'transaction_count': month_tx_count
+                },
+                'days': days_dict
+            }
+        finally:
+            conn.close()
+
+    def get_analytics_summary(self, profile_id=1, account_id=None, month_year=None):
+        """
+        Generates full-scale real-time financial analytics from actual database records.
+        - Month-over-Month Delta ('What Changed?') comparing current month against previous month.
+        - Account and wallet scoped calculations.
+        - Categorical spending breakdown with accurate percentages.
+        - Dynamic 50/30/20 Necessary vs Optional ratio.
+        - 6-month historical trends array for line graphs.
+        - Day-by-day comparison curves between current and previous months.
+        - Zero float drift, handles empty history gracefully.
+        """
+        today = datetime.date.today()
+        if not month_year:
+            month_year = today.strftime('%Y-%m')
+
+        try:
+            curr_dt = datetime.datetime.strptime(month_year + '-01', '%Y-%m-%d').date()
+        except ValueError:
+            curr_dt = today.replace(day=1)
+            month_year = curr_dt.strftime('%Y-%m')
+
+        prev_dt = curr_dt - datetime.timedelta(days=1)
+        prev_month_year = prev_dt.strftime('%Y-%m')
+
+        user = self.get_user_profile(profile_id)
+        curr = user.get('currency', '₹') if user else '₹'
+
+        conn = self._get_conn()
+        try:
+            acc_filter = ""
+            acc_params = []
+            if account_id and str(account_id) != 'ALL' and str(account_id).lower() != 'null':
+                aid = int(account_id)
+                acc_filter = " AND account_id = ?"
+                acc_params = [aid]
+
+            # 1. Current Month Totals
+            c_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income'" + acc_filter
+            c_exp_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense'" + acc_filter
+            c_tx_q = "SELECT COUNT(*) as c FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ?" + acc_filter
+            c_inc_paise = (conn.execute(c_inc_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
+            c_exp_paise = (conn.execute(c_exp_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
+            c_tx_count = (conn.execute(c_tx_q, [profile_id, month_year] + acc_params).fetchone()['c'] or 0)
+            c_net_paise = c_inc_paise - c_exp_paise
+            c_savings_paise = max(0, c_net_paise)
+            c_savings_rate = round((c_savings_paise / c_inc_paise) * 100, 1) if c_inc_paise > 0 else 0.0
+
+            # 2. Previous Month Totals
+            p_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income'" + acc_filter
+            p_exp_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense'" + acc_filter
+            p_tx_q = "SELECT COUNT(*) as c FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ?" + acc_filter
+            p_inc_paise = (conn.execute(p_inc_q, [profile_id, prev_month_year] + acc_params).fetchone()['s'] or 0)
+            p_exp_paise = (conn.execute(p_exp_q, [profile_id, prev_month_year] + acc_params).fetchone()['s'] or 0)
+            p_tx_count = (conn.execute(p_tx_q, [profile_id, prev_month_year] + acc_params).fetchone()['c'] or 0)
+            p_net_paise = p_inc_paise - p_exp_paise
+            p_savings_paise = max(0, p_net_paise)
+            p_savings_rate = round((p_savings_paise / p_inc_paise) * 100, 1) if p_inc_paise > 0 else 0.0
+
+            # 3. Month-over-Month Deltas
+            inc_delta_paise = c_inc_paise - p_inc_paise
+            inc_pct = round((float(inc_delta_paise) / float(p_inc_paise)) * 100, 1) if p_inc_paise > 0 else (100.0 if c_inc_paise > 0 else 0.0)
+
+            exp_delta_paise = c_exp_paise - p_exp_paise
+            exp_pct = round((float(exp_delta_paise) / float(p_exp_paise)) * 100, 1) if p_exp_paise > 0 else (100.0 if c_exp_paise > 0 else 0.0)
+
+            sav_delta_paise = c_savings_paise - p_savings_paise
+            sav_pct = round((float(sav_delta_paise) / float(p_savings_paise)) * 100, 1) if p_savings_paise > 0 else (100.0 if c_savings_paise > 0 else 0.0)
+
+            net_delta_paise = c_net_paise - p_net_paise
+
+            # 4. Category-Wise MoM Changes
+            curr_cats = self.get_category_spending(profile_id, month_year=month_year, account_id=account_id)
+            prev_cats = self.get_category_spending(profile_id, month_year=prev_month_year, account_id=account_id)
+            prev_map = {c['name']: c for c in prev_cats}
+            curr_map = {c['name']: c for c in curr_cats}
+
+            all_cat_names = list(dict.fromkeys([c['name'] for c in curr_cats] + [c['name'] for c in prev_cats]))
+            category_deltas = []
+            for cname in all_cat_names:
+                c_item = curr_map.get(cname)
+                p_item = prev_map.get(cname)
+                c_spent = c_item['spent'] if c_item else 0
+                p_spent = p_item['spent'] if p_item else 0
+                color = (c_item['color'] if c_item else (p_item['color'] if p_item else '#3b82f6'))
+                d_amt = c_spent - p_spent
+                d_pct = round((float(d_amt) / float(p_spent)) * 100, 1) if p_spent > 0 else (100.0 if c_spent > 0 else 0.0)
+
+                direction = 'increased' if d_amt > 0 else ('decreased' if d_amt < 0 else 'unchanged')
+                category_deltas.append({
+                    'name': cname,
+                    'color': color,
+                    'last_month': p_spent,
+                    'this_month': c_spent,
+                    'delta': d_amt,
+                    'delta_pct': d_pct,
+                    'direction': direction
+                })
+
+            # Sort by absolute delta
+            category_deltas.sort(key=lambda x: abs(x['delta']), reverse=True)
+
+            # 5. Dynamic 50/30/20 Rule: Necessary vs Optional
+            nec_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND type_tag = 'necessary'" + acc_filter
+            opt_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND type_tag = 'optional'" + acc_filter
+            nec_paise = (conn.execute(nec_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
+            opt_paise = (conn.execute(opt_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
+            tot_tagged_paise = nec_paise + opt_paise
+            nec_pct = round((nec_paise / tot_tagged_paise) * 100, 1) if tot_tagged_paise > 0 else 0.0
+            opt_pct = round((opt_paise / tot_tagged_paise) * 100, 1) if tot_tagged_paise > 0 else 0.0
+
+            # 6. Historical 6-Month Trends for Line Graphs
+            trend_months = []
+            cursor_dt = curr_dt
+            for _ in range(6):
+                m_str = cursor_dt.strftime('%Y-%m')
+                lbl = cursor_dt.strftime('%b %Y')
+                trend_months.insert(0, (m_str, lbl))
+                first_of_m = cursor_dt.replace(day=1)
+                cursor_dt = first_of_m - datetime.timedelta(days=1)
+
+            trend_history = []
+            for m_str, lbl in trend_months:
+                t_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income'" + acc_filter
+                t_exp_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense'" + acc_filter
+                t_inc = (conn.execute(t_inc_q, [profile_id, m_str] + acc_params).fetchone()['s'] or 0)
+                t_exp = (conn.execute(t_exp_q, [profile_id, m_str] + acc_params).fetchone()['s'] or 0)
+                t_net = t_inc - t_exp
+                t_sav = max(0, t_net)
+                trend_history.append({
+                    'month_key': m_str,
+                    'label': lbl,
+                    'income': paise_to_rupees(t_inc),
+                    'expenses': paise_to_rupees(t_exp),
+                    'savings': paise_to_rupees(t_sav),
+                    'net_cashflow': paise_to_rupees(t_net)
+                })
+
+            # 7. Day-by-Day comparison for current vs previous month (Days 1 to 31)
+            curr_daily_rows = conn.execute("""
+                SELECT strftime('%d', date) as day_num, type, SUM(amount_paise) as s
+                FROM transactions
+                WHERE profile_id = ? AND strftime('%Y-%m', date) = ? """ + acc_filter + """
+                GROUP BY day_num, type;
+            """, [profile_id, month_year] + acc_params).fetchall()
+
+            prev_daily_rows = conn.execute("""
+                SELECT strftime('%d', date) as day_num, type, SUM(amount_paise) as s
+                FROM transactions
+                WHERE profile_id = ? AND strftime('%Y-%m', date) = ? """ + acc_filter + """
+                GROUP BY day_num, type;
+            """, [profile_id, prev_month_year] + acc_params).fetchall()
+
+            curr_daily_exp = {}
+            curr_daily_inc = {}
+            for r in curr_daily_rows:
+                dn = int(r['day_num'])
+                if r['type'] == 'expense':
+                    curr_daily_exp[dn] = paise_to_rupees(r['s'])
+                elif r['type'] == 'income':
+                    curr_daily_inc[dn] = paise_to_rupees(r['s'])
+
+            prev_daily_exp = {}
+            prev_daily_inc = {}
+            for r in prev_daily_rows:
+                dn = int(r['day_num'])
+                if r['type'] == 'expense':
+                    prev_daily_exp[dn] = paise_to_rupees(r['s'])
+                elif r['type'] == 'income':
+                    prev_daily_inc[dn] = paise_to_rupees(r['s'])
+
+            daily_comparison = []
+            cum_curr_exp = 0
+            cum_prev_exp = 0
+            for day_idx in range(1, 32):
+                c_exp = curr_daily_exp.get(day_idx, 0)
+                p_exp = prev_daily_exp.get(day_idx, 0)
+                cum_curr_exp += c_exp
+                cum_prev_exp += p_exp
+                daily_comparison.append({
+                    'day': day_idx,
+                    'curr_expense': c_exp,
+                    'prev_expense': p_exp,
+                    'cum_curr_expense': cum_curr_exp,
+                    'cum_prev_expense': cum_prev_exp
+                })
+
+            return {
+                'current_month': month_year,
+                'previous_month': prev_month_year,
+                'current_month_label': curr_dt.strftime('%B %Y'),
+                'previous_month_label': prev_dt.strftime('%B %Y'),
+                'currency': curr,
+                'current': {
+                    'income': paise_to_rupees(c_inc_paise),
+                    'expenses': paise_to_rupees(c_exp_paise),
+                    'net_cashflow': paise_to_rupees(c_net_paise),
+                    'savings': paise_to_rupees(c_savings_paise),
+                    'savings_rate': c_savings_rate,
+                    'transaction_count': c_tx_count
+                },
+                'previous': {
+                    'income': paise_to_rupees(p_inc_paise),
+                    'expenses': paise_to_rupees(p_exp_paise),
+                    'net_cashflow': paise_to_rupees(p_net_paise),
+                    'savings': paise_to_rupees(p_savings_paise),
+                    'savings_rate': p_savings_rate,
+                    'transaction_count': p_tx_count
+                },
+                'delta': {
+                    'income': paise_to_rupees(inc_delta_paise),
+                    'income_pct': inc_pct,
+                    'expenses': paise_to_rupees(exp_delta_paise),
+                    'expenses_pct': exp_pct,
+                    'savings': paise_to_rupees(sav_delta_paise),
+                    'savings_pct': sav_pct,
+                    'net_cashflow': paise_to_rupees(net_delta_paise)
+                },
+                'category_deltas': category_deltas,
+                'category_spending': curr_cats,
+                'ratio_50_30_20': {
+                    'necessary_rupees': paise_to_rupees(nec_paise),
+                    'optional_rupees': paise_to_rupees(opt_paise),
+                    'total_expenses_rupees': paise_to_rupees(tot_tagged_paise),
+                    'necessary_pct': nec_pct,
+                    'optional_pct': opt_pct
+                },
+                'trend_history': trend_history,
+                'daily_comparison': daily_comparison
+            }
         finally:
             conn.close()
 

@@ -378,13 +378,39 @@ gantt
 
 ---
 
-## Phase 10 — Future Packaging & Distribution (Planned)
+## Phase 10 — Money Calendar & Real-Time Analytics (Completed)
 
-- [ ] **TASK-1001: PyInstaller Standalone Windows Executable**
+- [x] **TASK-1001: Money Calendar – Logic & UI/UX Redesign**
+  - **Description:** Redesigned Money Calendar to query actual ledger transactions (`date` column). Displays daily financial activity, daily income (+₹), daily expenses (-₹), transfers (↔), and transaction counts. Built Sunday-first monthly navigation, today's date highlighting, and selected-date details drawer displaying itemized transactions, category badges, accounts, amounts, and scheduled bills. Added filters for transaction type and account/wallet.
+  - **Verification:** Verified in `app/services/financial_service.py` (`get_calendar_data`), `templates/index.html`, `static/js/app.js`, and `tests/test_money_calendar_and_analytics.py`.
+- [x] **TASK-1002: Analytics & Trends Calculation Logic Overhaul**
+  - **Description:** Overhauled Analytics & Trends calculations to use pure database records. Strictly excludes transfers from income and expenses, prevents opening balances from counting as regular income, and isolates savings goal deposits/withdrawals. Supports account-wise and wallet-wise filtering across all metrics.
+  - **Verification:** Verified in `FinancialService.get_analytics_summary()`, `app/routes/api.py`, and `tests/test_money_calendar_and_analytics.py`.
+- [x] **TASK-1003: Rename Category Expense Distribution & Real Data Integration**
+  - **Description:** Renamed title from "Category Expense Distribution (Offline Chart.js)" to "Category Expense Distribution", removing technical implementation details from user-facing UI. Connected doughnut chart and spending breakdown list directly to real category expenditure data.
+  - **Verification:** Verified in `templates/index.html`, `static/js/app.js` (`renderCategoryExpenseChart`), and `tests/test_money_calendar_and_analytics.py`.
+- [x] **TASK-1004: "What Changed?" — Month-over-Month Delta Engine**
+  - **Description:** Built real-time month-over-month comparison engine computing income change, expense change, savings change, net cash flow change, and percentage increase or decrease. Displays a dynamic category spending delta table with last month, this month, net delta, and trend badges, plus a plain-English variance banner.
+  - **Verification:** Verified in `FinancialService.get_analytics_summary()` and `tests/test_money_calendar_and_analytics.py`.
+- [x] **TASK-1005: Financial Trends Visualizer Line Graph Implementation**
+  - **Description:** Added responsive, offline Chart.js line graph supporting 4 interactive visualization modes: Monthly Income Trends (6-month), Monthly Expense Trends (6-month), Monthly Savings Trends (6-month), and Current vs Previous Month 31-day cumulative comparison.
+  - **Verification:** Verified in `static/js/app.js` (`renderAnalyticsTrendLineChart`), `templates/index.html`, and `tests/test_money_calendar_and_analytics.py`.
+- [x] **TASK-1006: Real-Time Dynamic Data Synchronization**
+  - **Description:** Wired calendar and analytics into SPA navigation (`navigateTo('calendar')`, `navigateTo('analytics')`), `refreshAllData()`, transaction CRUD operations, account transfers, savings goal actions, and theme switcher (`applyTheme()`).
+  - **Verification:** Verified in `static/js/app.js`.
+- [x] **TASK-1007: Dedicated Automated Test Suite & Regression Verification (98/98 Tests Passing)**
+  - **Description:** Created comprehensive test suite `tests/test_money_calendar_and_analytics.py` containing 10 unit tests covering daily activity, navigation, filtering, transfer isolation, MoM delta math, category distribution, 50/30/20 ratio, line graphs, and empty profile safety. Added REST API tests in `tests/test_api.py`. Entire test suite passes 98/98 tests with zero errors.
+  - **Verification:** Verified via `python3 -m unittest discover -s tests` (Ran 98 tests, OK).
+
+---
+
+## Phase 11 — Future Packaging & Distribution (Planned)
+
+- [ ] **TASK-1101: PyInstaller Standalone Windows Executable**
   - **Description:** Package MoneyTrack as a single-file portable `.exe` bundle for offline Windows execution.
   - **Priority:** Medium
   - **Dependencies:** None (App is fully functional via `python run.py`).
-- [ ] **TASK-1002: Linux AppImage / Debian Package**
+- [ ] **TASK-1102: Linux AppImage / Debian Package**
   - **Description:** Package MoneyTrack with desktop launcher integration for Linux workstations.
   - **Priority:** Medium
   - **Dependencies:** None.

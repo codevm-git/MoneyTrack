@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.5-beta] - 2026-11-21
+
+### Added
+- **Money Calendar – Logic Improvements, Real-Time Analytics & UI/UX Redesign:**
+  - **Money Calendar Redesign:**
+    - Connected calendar directly to the actual SQLite transactions ledger (`date` column).
+    - Monthly calendar grid with Sunday-first weekday headers, previous/next month navigation, and quick "Today" selector.
+    - Daily financial activity indicators displaying daily income (+₹), daily expenses (-₹), transfers (↔), and transaction counts on each date cell.
+    - Highlighted current date (Today) with a distinct emerald accent ring.
+    - Selected-Date Details Card: Displays date, total income, total expenses, incoming transfers, outgoing transfers, transaction count, complete itemized transaction list with category badges, and scheduled cashflows.
+    - Dynamic filtering by Transaction Type (All, Incomes Only, Expenses Only, Transfers Only) and Account/Wallet.
+  - **Analytics & Trends Calculation Logic Fix:**
+    - Real-time financial calculations querying actual database transactions.
+    - Strict financial isolation: Transfers excluded from regular income/expenses, opening balances excluded from monthly income, and savings goal deposits/withdrawals treated as transfers.
+    - Dynamic 50/30/20 Rule: Necessary Needs vs. Optional Wants spending ratio computed dynamically from transaction tags (`necessary` vs `optional`).
+    - Account-wise and wallet-wise filtering supported across all analytics widgets.
+  - **Category Expense Distribution:**
+    - Renamed header from "Category Expense Distribution (Offline Chart.js)" to "Category Expense Distribution", removing technical library implementation details from user-facing UI.
+    - Connected doughnut chart to actual category expenditure records with real percentages, colors, and responsive tooltips.
+  - **"What Changed?" — Month-over-Month Delta Engine:**
+    - Compares current month against previous month using real transaction data.
+    - Computes Income Change, Expense Change, Savings Change, Net Cash Flow Change, and Percentage increase or decrease.
+    - Dynamic per-category MoM spending comparison table with last month spent, this month spent, delta amounts, delta percentages, and trend direction badges.
+    - Contextual plain-English variance summary banner.
+  - **Financial Trends Visualizer Line Graph:**
+    - Responsive, offline Chart.js line graph supporting 4 interactive visualization modes:
+      1. Monthly Income Trends (6-month history)
+      2. Monthly Expense Trends (6-month history)
+      3. Monthly Savings Trends (6-month history)
+      4. Current vs Previous Month Comparison (Day 1 to 31 cumulative spending)
+  - **Automated Verification:**
+    - Built comprehensive unit test suite `tests/test_money_calendar_and_analytics.py` with 10 unit tests covering daily activity, month navigation, account filtering, transfer isolation, MoM delta math, category distribution, 50/30/20 ratio, line graphs, and empty profile safety.
+    - Added REST API tests in `tests/test_api.py` covering `/api/calendar/month` and `/api/analytics/summary`.
+    - Entire project test suite achieves 98/98 automated tests passing (100% pass rate across 12 suites).
+
+---
+
 ## [0.8.4-beta] - 2026-11-21
 
 ### Added

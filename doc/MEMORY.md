@@ -1,12 +1,12 @@
 # MoneyTrack — Persistent AI Project Context & Memory
 
-**Document Version:** 1.2.0  
+**Document Version:** 1.3.0  
 **Status:** Living Engineering Memory & AI Context Anchor  
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/MEMORY.md`  
-**Current Release Version:** `v0.8.4-beta` (Stable Target: `v1.0.0`)  
-**Test Suite Status:** 86/86 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.5-beta` (Stable Target: `v1.0.0`)  
+**Test Suite Status:** 98/98 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -108,7 +108,7 @@ flowchart LR
 ├── templates/
 │   ├── index.html               # Authoritative single-page application UI matching reference
 │   └── report.html              # Printer-ready & PDF exportable monthly statement
-├── tests/                       # Automated test suite (86 tests, 100% pass across 11 suites)
+├── tests/                       # Automated test suite (98 tests, 100% pass across 12 suites)
 │   ├── test_accounts.py
 │   ├── test_api.py
 │   ├── test_calculators.py
@@ -116,6 +116,7 @@ flowchart LR
 │   ├── test_e2e_workflows.py
 │   ├── test_financial_service.py
 │   ├── test_money_and_transactions.py
+│   ├── test_money_calendar_and_analytics.py
 │   ├── test_savings_goals_wallets.py
 │   ├── test_security_and_integrity.py
 │   ├── test_simulator_and_affordability.py
@@ -178,11 +179,12 @@ flowchart LR
 ---
 
 ## 11. Current Development Stage & Milestones
-- **Current Version:** `v0.8.4-beta`
+- **Current Version:** `v0.8.5-beta`
 - **Core Architecture:** 100% Implemented (Flask backend, SQLite schema, Jinja2 views, REST APIs).
-- **Test Matrix:** 86/86 automated tests passing across 11 test suites.
+- **Test Matrix:** 98/98 automated tests passing across 12 test suites.
 - **Phase 8 Milestone Completed:** Savings Goals Dedicated Wallets, user-controlled Add/Withdraw money, non-destructive fund return on goal deletion, full ledger transfer integration, custom GUI modals without native popups, and real-time wallet tracking in Accounts & Wallets.
 - **Phase 9 Milestone Completed:** Financial Planner (Try a Financial Scenario & Check Before You Buy) overhaul — verified real financial data integration, account-specific payment selection, dedicated savings goal protection, recurring commitments & category budget boundaries, green highlight fix, dynamic local Chart.js analytics, and complete test suite (86/86 passing).
+- **Phase 10 Milestone Completed:** Money Calendar & Real-Time Analytics — connected calendar directly to actual ledger transactions, interactive monthly grid with day details drawer, MoM variance delta engine with category breakdown, renamed Category Expense Distribution removing technical library references, multi-period line graphs (Income, Expense, Savings, Day 1..31 cumulative comparison), and complete test suite (98/98 passing).
 - **Offline Packaging:** Vendored offline dependencies verified.
 
 ---

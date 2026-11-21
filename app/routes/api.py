@@ -551,6 +551,16 @@ def delete_goal(goal_id):
         return jsonify({'error': str(e)}), 400
 
 # --- Calendar ---
+@api_bp.route('/calendar/month', methods=['GET'])
+def get_calendar_month():
+    profile_id = get_current_profile_id()
+    year = request.args.get('year')
+    month = request.args.get('month')
+    account_id = request.args.get('account_id')
+    tx_type = request.args.get('type')
+    data = fin_service.get_calendar_data(profile_id, year=year, month=month, account_id=account_id, tx_type=tx_type)
+    return jsonify(data)
+
 @api_bp.route('/calendar', methods=['GET'])
 def list_calendar():
     profile_id = get_current_profile_id()
@@ -578,6 +588,15 @@ def delete_calendar(event_id):
     profile_id = get_current_profile_id()
     fin_service.delete_calendar_event(profile_id, event_id)
     return jsonify({'success': True})
+
+# --- Analytics & Financial Trends ---
+@api_bp.route('/analytics/summary', methods=['GET'])
+def get_analytics_summary():
+    profile_id = get_current_profile_id()
+    account_id = request.args.get('account_id')
+    month_year = request.args.get('month_year')
+    data = fin_service.get_analytics_summary(profile_id, account_id=account_id, month_year=month_year)
+    return jsonify(data)
 
 # --- Financial Planner (Simulations & Affordability) ---
 @api_bp.route('/simulate/baseline', methods=['GET'])

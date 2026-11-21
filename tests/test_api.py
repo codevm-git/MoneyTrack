@@ -219,5 +219,54 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertIn('total_liquid_available', aff)
         self.assertIn('summary_text', aff)
 
+    def test_calendar_month_api(self):
+        # 1. Test GET /api/calendar/month
+        res = self.client.get('/api/calendar/month?year=2026&month=10')
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data['year'], 2026)
+        self.assertEqual(data['month'], 10)
+        self.assertEqual(data['month_name'], 'October')
+        self.assertIn('month_summary', data)
+        self.assertIn('income', data['month_summary'])
+        self.assertIn('expenses', data['month_summary'])
+        self.assertIn('days', data)
+        self.assertEqual(len(data['days']), 31)
+
+        # 2. Test account filter
+        res_acc = self.client.get('/api/calendar/month?year=2026&month=10&account_id=1')
+        self.assertEqual(res_acc.status_code, 200)
+        data_acc = res_acc.get_json()
+        self.assertIn('days', data_acc)
+
+        # 3. Test type filter
+        res_type = self.client.get('/api/calendar/month?year=2026&month=10&type=expense')
+        self.assertEqual(res_type.status_code, 200)
+        data_type = res_type.get_json()
+        self.assertIn('days', data_type)
+
+    def test_analytics_summary_api(self):
+        # 1. Test GET /api/analytics/summary
+        res = self.client.get('/api/analytics/summary?month_year=2026-10')
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data['current_month'], '2026-10')
+        self.assertEqual(data['previous_month'], '2026-09')
+        self.assertIn('current', data)
+        self.assertIn('previous', data)
+        self.assertIn('delta', data)
+        self.assertIn('category_deltas', data)
+        self.assertIn('category_spending', data)
+        self.assertIn('ratio_50_30_20', data)
+        self.assertIn('trend_history', data)
+        self.assertIn('daily_comparison', data)
+        self.assertEqual(len(data['trend_history']), 6)
+        self.assertEqual(len(data['daily_comparison']), 31)
+
+        # 2. Test with account filter
+        res_acc = self.client.get('/api/analytics/summary?account_id=1&month_year=2026-10')
+        self.assertEqual(res_acc.status_code, 200)
+        self.assertIn('current', res_acc.get_json())
+
 if __name__ == '__main__':
     unittest.main()
