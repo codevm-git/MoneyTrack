@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, Response, session
 from app.services.financial_service import FinancialService
-from app.services.calculator_service import calculate_emi, calculate_compound_interest, calculate_inflation
+from app.services.calculator_service import calculate_emi, calculate_compound_interest, calculate_inflation, calculate_savings_growth
 from app.services.learning_service import LearningService
 from app.services.backup_service import BackupService
 import json
@@ -666,6 +666,17 @@ def calc_inf_api():
         r = float(data.get('rate', 6.0))
         t = float(data.get('years', 10))
         return jsonify(calculate_inflation(c, r, t))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@api_bp.route('/calculators/savings', methods=['POST'])
+def calc_savings_api():
+    data = request.get_json() or {}
+    try:
+        d = float(data.get('deposit', 5000))
+        r = float(data.get('rate', 10.0))
+        t = float(data.get('years', 5))
+        return jsonify(calculate_savings_growth(d, r, t))
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

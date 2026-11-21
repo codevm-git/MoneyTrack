@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.6-beta] - 2026-11-21
+
+### Added
+- **Financial Calculators – Simplify UI/UX, Improve Calculations & Add Visual Results:**
+  - **Financial Calculator Suite Redesign:**
+    - Verified and hardened mathematical calculation logic across all four primary calculators: Loan EMI, Compound Interest, Monthly Savings Growth (SIP), and Inflation Impact.
+    - Added Monthly Savings Growth (SIP / Recurring Deposit) Calculator using the monthly compounding wealth accumulation formula ($FV = P \cdot \frac{(1+r)^n - 1}{r} \cdot (1+r)$).
+    - Exposed backwards-compatible REST API endpoint `POST /api/calculators/savings` in `app/routes/api.py`.
+    - Simplified terminology, removed confusing clutter and technical jargon, and added plain-English summaries.
+  - **Educational Guidance & Simplified UI/UX:**
+    - Category filter pills (`All Tools`, `Loan EMI`, `Compound Interest`, `Monthly Savings`, `Inflation Cost`) to quickly toggle between tools.
+    - Collapsible educational guidance accordion for each calculator answering: "What is this used for?", "What information do I need?", and "What does the result mean?".
+    - Quick preset scenario buttons for realistic financial targets:
+      - Loan EMI: Home Loan (25L @ 8.5%, 20y), Car Loan (8L @ 9.5%, 5y), Personal Loan (2L @ 12.5%, 3y).
+      - Compound Growth: Fixed Deposit (1L @ 7%, 5y), Index Fund (1L @ 12%, 10y), Long-Term Wealth (5L @ 12%, 20y).
+      - Monthly Savings: Starter SIP (₹3,000/mo, 10y @ 12%), Balanced SIP (₹10,000/mo, 15y @ 12%), Wealth SIP (₹25,000/mo, 20y @ 12%).
+      - Inflation: Near Term (5y @ 6%), Medium Term (10y @ 6%), Long Term (20y @ 7%).
+    - Real-time client-side calculation on input change (`oninput`) with sub-10ms feedback, plus dedicated `Calculate` and `Reset` buttons.
+    - Preserved 100% offline air-gap and MoneyTrack design system (`#16a34a` brand green, dark/light theme support, `rounded-2xl` card styling).
+  - **Enhanced Results Presentation & Visual Charts:**
+    - Prominently highlighted primary result metrics with large bold numbers, currency formatting, and descriptive explanation sentences.
+    - Detailed breakdown metrics: Loan principal vs interest share with percentages, Compound Interest wealth multiplier (e.g., 3.11x), SIP total deposited vs returns generated, and Inflation purchasing power loss badge.
+    - Added dynamic, theme-aware visualizations using bundled local Chart.js (`static/vendor/chart.umd.min.js`):
+      - Loan EMI: Doughnut chart displaying Principal vs Interest composition.
+      - Compound Growth: Line graph illustrating Initial Principal vs Compounded Wealth over time.
+      - Monthly Savings (SIP): Line graph displaying Total Money Deposited vs Projected Wealth curve.
+      - Inflation Cost: Visual two-tone progress meter contrasting Retained Buying Power against Inflationary Loss.
+  - **Automated Verification:**
+    - Added unit tests in `tests/test_calculators.py` for `calculate_savings_growth`, zero interest rate, zero tenure, and schedule generation.
+    - Added API test in `tests/test_api.py` for `/api/calculators/savings`.
+
+---
+
 ## [0.8.5-beta] - 2026-11-21
 
 ### Added

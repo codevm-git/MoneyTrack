@@ -10,13 +10,29 @@ def calculate_emi(principal, annual_rate_pct, tenure_months):
     Computes Loan EMI using the standard reducing balance formula:
     E = (P * r * (1 + r)^N) / ((1 + r)^N - 1)
     where r = annual_rate / 12 / 100, N = tenure in months.
+    Returns monthly EMI, total interest, total payable, and payment breakdown.
     """
-    P = float(principal)
-    annual_rate = float(annual_rate_pct)
-    N = int(tenure_months)
+    try:
+        P = float(principal)
+        annual_rate = float(annual_rate_pct)
+        N = int(tenure_months)
+    except (ValueError, TypeError):
+        return {
+            'principal': 0, 'monthly_emi': 0, 'total_interest': 0,
+            'total_payable': 0, 'principal_pct': 0.0, 'interest_pct': 0.0,
+            'amortization_schedule': []
+        }
     
     if P <= 0 or N <= 0:
-        return {'monthly_emi': 0, 'total_interest': 0, 'total_payable': 0}
+        return {
+            'principal': max(0, round_curr(P)),
+            'monthly_emi': 0,
+            'total_interest': 0,
+            'total_payable': max(0, round_curr(P)),
+            'principal_pct': 100.0 if P > 0 else 0.0,
+            'interest_pct': 0.0,
+            'amortization_schedule': []
+        }
         
     r = annual_rate / 12 / 100
     
@@ -28,34 +44,167 @@ def calculate_emi(principal, annual_rate_pct, tenure_months):
         
     total_payable = emi * N
     total_interest = total_payable - P
+
+    # Generate balance breakdown schedule for charts
+    schedule = []
+    balance = P
+    step = max(1, N // 10)
+    for month in range(1, N + 1):
+        if r > 0:
+            interest_month = balance * r
+            principal_month = emi - interest_month
+            balance = max(0.0, balance - principal_month)
+        else:
+            balance = max(0.0, balance - emi)
+
+        if month % step == 0 or month == N:
+            schedule.append({
+                'month': month,
+                'year': round(month / 12, 1),
+                'remaining_balance': round_curr(balance)
+            })
+
+    principal_curr = round_curr(P)
+    tot_payable_curr = round_curr(total_payable)
+    tot_interest_curr = round_curr(total_interest)
+    interest_pct = round((tot_interest_curr / tot_payable_curr) * 100, 1) if tot_payable_curr > 0 else 0.0
+    principal_pct = round(100.0 - interest_pct, 1)
     
     return {
-        'principal': round_curr(P),
+        'principal': principal_curr,
         'monthly_emi': round_curr(emi),
-        'total_interest': round_curr(total_interest),
-        'total_payable': round_curr(total_payable)
+        'total_interest': tot_interest_curr,
+        'total_payable': tot_payable_curr,
+        'principal_pct': principal_pct,
+        'interest_pct': interest_pct,
+        'amortization_schedule': schedule
     }
 
 def calculate_compound_interest(principal, annual_rate_pct, tenure_years, compound_freq=1):
     """
     Computes Compound Interest: A = P * (1 + r/n)^(n*t)
     where n = compounding frequency (default 1 = annually).
+    Returns future value, interest earned, growth multiplier, and yearly schedule.
     """
-    P = float(principal)
-    r = float(annual_rate_pct) / 100
-    t = float(tenure_years)
-    n = int(compound_freq)
+    try:
+        P = float(principal)
+        r = float(annual_rate_pct) / 100
+        t = float(tenure_years)
+        n = int(compound_freq) if int(compound_freq) > 0 else 1
+    except (ValueError, TypeError):
+        return {
+            'initial_principal': 0, 'future_value': 0,
+            'interest_earned': 0, 'growth_multiplier': 1.0,
+            'yearly_schedule': []
+        }
     
     if P <= 0 or t <= 0:
-        return {'future_value': round_curr(P), 'interest_earned': 0}
+        return {
+            'initial_principal': max(0, round_curr(P)),
+            'future_value': max(0, round_curr(P)),
+            'interest_earned': 0,
+            'growth_multiplier': 1.0,
+            'yearly_schedule': []
+        }
         
     future_value = P * math.pow(1 + (r / n), n * t)
     interest_earned = future_value - P
+    multiplier = round(future_value / P, 2) if P > 0 else 1.0
+
+    # Generate yearly schedule for line graph
+    schedule = []
+    step = 1 if t <= 15 else (2 if t <= 30 else max(1, int(t // 10)))
+    years_points = list(range(0, int(t) + 1, step))
+    if int(t) not in years_points:
+        years_points.append(int(t))
+
+    for y in years_points:
+        y_val = P * math.pow(1 + (r / n), n * y)
+        schedule.append({
+            'year': y,
+            'principal': round_curr(P),
+            'value': round_curr(y_val),
+            'balance': round_curr(y_val),
+            'interest': round_curr(max(0.0, y_val - P))
+        })
     
     return {
         'initial_principal': round_curr(P),
         'future_value': round_curr(future_value),
-        'interest_earned': round_curr(interest_earned)
+        'interest_earned': round_curr(interest_earned),
+        'growth_multiplier': multiplier,
+        'yearly_schedule': schedule
+    }
+
+def calculate_savings_growth(monthly_deposit, annual_rate_pct, tenure_years):
+    """
+    Computes Future Wealth for regular monthly contributions (SIP / Recurring Savings):
+    FV = P * [((1 + r)^n - 1) / r] * (1 + r)
+    where P = monthly deposit, r = annual_rate / 12 / 100, n = tenure_years * 12.
+    """
+    try:
+        P = float(monthly_deposit)
+        annual_rate = float(annual_rate_pct)
+        t = float(tenure_years)
+    except (ValueError, TypeError):
+        return {
+            'monthly_deposit': 0, 'tenure_years': 0, 'total_deposited': 0,
+            'future_value': 0, 'interest_earned': 0, 'growth_pct': 0.0,
+            'yearly_schedule': []
+        }
+
+    if P <= 0 or t <= 0:
+        return {
+            'monthly_deposit': max(0, round_curr(P)),
+            'tenure_years': max(0, round(t, 1)),
+            'total_deposited': 0,
+            'future_value': 0,
+            'interest_earned': 0,
+            'growth_pct': 0.0,
+            'yearly_schedule': []
+        }
+
+    n = int(t * 12)
+    r = (annual_rate / 100) / 12
+
+    if r > 0:
+        fv = P * ((math.pow(1 + r, n) - 1) / r) * (1 + r)
+    else:
+        fv = P * n
+
+    total_deposited = P * n
+    interest_earned = max(0.0, fv - total_deposited)
+    growth_pct = round((interest_earned / total_deposited) * 100, 1) if total_deposited > 0 else 0.0
+
+    schedule = []
+    step = 1 if t <= 15 else (2 if t <= 30 else max(1, int(t // 10)))
+    years_points = list(range(1, int(t) + 1, step))
+    if int(t) not in years_points:
+        years_points.append(int(t))
+
+    for y in years_points:
+        months_y = y * 12
+        if r > 0:
+            val_y = P * ((math.pow(1 + r, months_y) - 1) / r) * (1 + r)
+        else:
+            val_y = P * months_y
+        dep_y = P * months_y
+        schedule.append({
+            'year': y,
+            'deposited': round_curr(dep_y),
+            'total_deposited': round_curr(dep_y),
+            'future_value': round_curr(val_y),
+            'returns': round_curr(max(0.0, val_y - dep_y))
+        })
+
+    return {
+        'monthly_deposit': round_curr(P),
+        'tenure_years': round(t, 1),
+        'total_deposited': round_curr(total_deposited),
+        'future_value': round_curr(fv),
+        'interest_earned': round_curr(interest_earned),
+        'growth_pct': growth_pct,
+        'yearly_schedule': schedule
     }
 
 def calculate_inflation(current_cost, inflation_rate_pct, tenure_years):
@@ -63,19 +212,34 @@ def calculate_inflation(current_cost, inflation_rate_pct, tenure_years):
     Computes Future Equivalent Cost and purchasing power erosion:
     FV = PV * (1 + i)^t
     """
-    PV = float(current_cost)
-    i = float(inflation_rate_pct) / 100
-    t = float(tenure_years)
+    try:
+        PV = float(current_cost)
+        i = float(inflation_rate_pct) / 100
+        t = float(tenure_years)
+    except (ValueError, TypeError):
+        return {
+            'current_cost': 0, 'future_cost': 0,
+            'price_increase': 0, 'inflation_rate': 0.0,
+            'purchasing_power_loss_pct': 0.0
+        }
     
     if PV <= 0 or t <= 0:
-        return {'future_cost': round_curr(PV), 'purchasing_power_loss_pct': 0.0}
+        return {
+            'current_cost': max(0, round_curr(PV)),
+            'future_cost': max(0, round_curr(PV)),
+            'price_increase': 0,
+            'inflation_rate': float(inflation_rate_pct) if inflation_rate_pct else 0.0,
+            'purchasing_power_loss_pct': 0.0
+        }
         
     future_cost = PV * math.pow(1 + i, t)
+    price_increase = future_cost - PV
     loss_pct = (1.0 - (PV / future_cost)) * 100 if future_cost > 0 else 0.0
     
     return {
         'current_cost': round_curr(PV),
         'future_cost': round_curr(future_cost),
+        'price_increase': round_curr(price_increase),
         'inflation_rate': float(inflation_rate_pct),
         'purchasing_power_loss_pct': round(loss_pct, 1)
     }

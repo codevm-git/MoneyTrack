@@ -1,12 +1,12 @@
 # MoneyTrack — Persistent AI Project Context & Memory
 
-**Document Version:** 1.3.0  
+**Document Version:** 1.4.0  
 **Status:** Living Engineering Memory & AI Context Anchor  
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/MEMORY.md`  
-**Current Release Version:** `v0.8.5-beta` (Stable Target: `v1.0.0`)  
-**Test Suite Status:** 98/98 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.6-beta` (Stable Target: `v1.0.0`)  
+**Test Suite Status:** 101/101 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -170,21 +170,24 @@ flowchart LR
    $$r = \frac{\text{Annual Rate}}{12 \times 100}, \quad EMI = \frac{P \cdot r \cdot (1+r)^N}{(1+r)^N - 1}, \quad \text{Total Interest} = (EMI \times N) - P$$
 4. **Compound Interest:**
    $$A = P \cdot \left(1 + \frac{r}{100}\right)^t, \quad \text{Yield} = A - P$$
-5. **Inflation Future Purchasing Power:**
+5. **Monthly Savings Growth (SIP / Recurring Deposit):**
+   $$r = \frac{\text{Annual Rate}}{12 \times 100}, \quad n = \text{Years} \times 12, \quad FV = P \cdot \left[\frac{(1+r)^n - 1}{r}\right] \cdot (1+r)$$
+6. **Inflation Future Purchasing Power:**
    $$FV = PV \cdot \left(1 + \frac{i}{100}\right)^t$$
-6. **3-Pillar Financial Health Score ($0–100$):**
+7. **3-Pillar Financial Health Score ($0–100$):**
    $$\text{Score} = \text{Savings Rate (40\%)} + \text{Budget Discipline (35\%)} + \text{Emergency Runway (25\%)}$$
    *(Clamped to 0 for unseeded or empty profiles).*
 
 ---
 
 ## 11. Current Development Stage & Milestones
-- **Current Version:** `v0.8.5-beta`
+- **Current Version:** `v0.8.6-beta`
 - **Core Architecture:** 100% Implemented (Flask backend, SQLite schema, Jinja2 views, REST APIs).
-- **Test Matrix:** 98/98 automated tests passing across 12 test suites.
+- **Test Matrix:** 101/101 automated tests passing across 12 test suites.
 - **Phase 8 Milestone Completed:** Savings Goals Dedicated Wallets, user-controlled Add/Withdraw money, non-destructive fund return on goal deletion, full ledger transfer integration, custom GUI modals without native popups, and real-time wallet tracking in Accounts & Wallets.
 - **Phase 9 Milestone Completed:** Financial Planner (Try a Financial Scenario & Check Before You Buy) overhaul — verified real financial data integration, account-specific payment selection, dedicated savings goal protection, recurring commitments & category budget boundaries, green highlight fix, dynamic local Chart.js analytics, and complete test suite (86/86 passing).
 - **Phase 10 Milestone Completed:** Money Calendar & Real-Time Analytics — connected calendar directly to actual ledger transactions, interactive monthly grid with day details drawer, MoM variance delta engine with category breakdown, renamed Category Expense Distribution removing technical library references, multi-period line graphs (Income, Expense, Savings, Day 1..31 cumulative comparison), and complete test suite (98/98 passing).
+- **Phase 11 Milestone Completed:** Financial Calculators & Wealth Planning — verified all math formulas, added Monthly Savings Growth (SIP), implemented category filter pills, educational guidance accordions, quick scenario presets, instant calculation with sub-10ms feedback, and dynamic offline Chart.js visualizations (EMI doughnut, CI line graph, SIP line graph, and inflation retention meter), 101/101 tests passing.
 - **Offline Packaging:** Vendored offline dependencies verified.
 
 ---

@@ -4,7 +4,7 @@
  */
 const APP_CONFIG = {
   name: "MoneyTrack",
-  version: "0.8.1",
+  version: "0.8.6",
   stage: "Beta"
 };
 
@@ -103,7 +103,15 @@ const MoneyTrackApp = {
       data: null,
       lineChart: null,
       categoryChart: null
-    }
+    },
+    calcCharts: {
+      emi: null,
+      ci: null,
+      sip: null
+    },
+    lastEmiData: null,
+    lastCiData: null,
+    lastSipData: null
   },
 
   renderAppVersionInfo: function() {
@@ -626,6 +634,11 @@ const MoneyTrackApp = {
         this.renderCalendarSelectedDate(this.state.calendarState.selectedDate);
       }
     }
+    if (this.state.currentTab === 'tools') {
+      if (this.state.lastEmiData) this.renderEmiChart(this.state.lastEmiData);
+      if (this.state.lastCiData) this.renderCiChart(this.state.lastCiData);
+      if (this.state.lastSipData) this.renderSavingsGrowthChart(this.state.lastSipData);
+    }
   },
 
   // Navigation
@@ -664,6 +677,9 @@ const MoneyTrackApp = {
     }
     if (viewId === 'simulator') {
       this.initSimulatorView();
+    }
+    if (viewId === 'tools') {
+      this.initCalculators();
     }
 
     this.renderAppVersionInfo();
@@ -3673,63 +3689,449 @@ const MoneyTrackApp = {
     }).catch(err => console.error("Error evaluating affordability:", err));
   },
 
-  // Calculators
+  // ==========================================
+  // Financial Calculators & Wealth Planning
+  // ==========================================
   initCalculators: function() {
     this.calculateEMI();
     this.calculateCI();
+    this.calculateSavingsGrowth();
     this.calculateInflation();
   },
 
+  filterCalculators: function(category) {
+    const tabs = ['all', 'emi', 'ci', 'sip', 'inflation'];
+    tabs.forEach(tab => {
+      const btn = document.getElementById(`calc-tab-${tab}`);
+      if (btn) {
+        if (tab === category) {
+          btn.className = 'calc-tab-btn px-3 py-1.5 rounded-lg font-semibold bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm transition-all';
+        } else {
+          btn.className = 'calc-tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all';
+        }
+      }
+    });
+
+    const cards = [
+      { id: 'calc-card-emi', cat: 'emi' },
+      { id: 'calc-card-ci', cat: 'ci' },
+      { id: 'calc-card-sip', cat: 'sip' },
+      { id: 'calc-card-inflation', cat: 'inflation' }
+    ];
+
+    cards.forEach(card => {
+      const el = document.getElementById(card.id);
+      if (!el) return;
+      if (category === 'all' || category === card.cat) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+  },
+
+  setCalcPreset: function(type, val1, val2, val3, val4) {
+    if (type === 'emi') {
+      const pEl = document.getElementById('calc-emi-principal');
+      const rEl = document.getElementById('calc-emi-rate');
+      const mEl = document.getElementById('calc-emi-months');
+      if (pEl) pEl.value = val1;
+      if (rEl) rEl.value = val2;
+      if (mEl) mEl.value = val3;
+      this.calculateEMI();
+    } else if (type === 'ci') {
+      const pEl = document.getElementById('calc-ci-principal');
+      const rEl = document.getElementById('calc-ci-rate');
+      const yEl = document.getElementById('calc-ci-years');
+      const fEl = document.getElementById('calc-ci-freq');
+      if (pEl) pEl.value = val1;
+      if (rEl) rEl.value = val2;
+      if (yEl) yEl.value = val3;
+      if (fEl && val4) fEl.value = val4;
+      this.calculateCI();
+    } else if (type === 'sip') {
+      const dEl = document.getElementById('calc-sip-deposit');
+      const rEl = document.getElementById('calc-sip-rate');
+      const yEl = document.getElementById('calc-sip-years');
+      if (dEl) dEl.value = val1;
+      if (rEl) rEl.value = val2;
+      if (yEl) yEl.value = val3;
+      this.calculateSavingsGrowth();
+    } else if (type === 'inflation') {
+      const cEl = document.getElementById('calc-inf-cost');
+      const rEl = document.getElementById('calc-inf-rate');
+      const yEl = document.getElementById('calc-inf-years');
+      if (cEl) cEl.value = val1;
+      if (rEl) rEl.value = val2;
+      if (yEl) yEl.value = val3;
+      this.calculateInflation();
+    }
+  },
+
+  // 1. EMI Calculator
   calculateEMI: function() {
     const pEl = document.getElementById('calc-emi-principal');
     const rEl = document.getElementById('calc-emi-rate');
     const mEl = document.getElementById('calc-emi-months');
     if (!pEl || !rEl || !mEl) return;
-    const principal = parseFloat(pEl.value) || 0;
-    const rate = parseFloat(rEl.value) || 0;
-    const months = parseInt(mEl.value) || 1;
+    const principal = Math.max(0, parseFloat(pEl.value) || 0);
+    const rate = Math.max(0, parseFloat(rEl.value) || 0);
+    const months = Math.max(1, parseInt(mEl.value) || 1);
 
     fetch('/api/calculators/emi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ principal, rate, months })
     }).then(r => r.json()).then(res => {
+      this.state.lastEmiData = res;
       const mRes = document.getElementById('res-emi-monthly');
       const iRes = document.getElementById('res-emi-interest');
+      const tRes = document.getElementById('res-emi-total');
+      const pDisp = document.getElementById('res-emi-principal-display');
+      const pPct = document.getElementById('res-emi-principal-pct');
+      const iPct = document.getElementById('res-emi-interest-pct');
+      const desc = document.getElementById('res-emi-desc');
+
       if (mRes) mRes.textContent = (res.monthly_emi || 0).toLocaleString();
       if (iRes) iRes.textContent = (res.total_interest || 0).toLocaleString();
+      if (tRes) tRes.textContent = (res.total_payable || 0).toLocaleString();
+      if (pDisp) pDisp.textContent = (res.principal || 0).toLocaleString();
+      if (pPct) pPct.textContent = `(${res.principal_pct || 0}%)`;
+      if (iPct) iPct.textContent = `(${res.interest_pct || 0}%)`;
+      if (desc) {
+        desc.textContent = `For a ₹${(res.principal || 0).toLocaleString()} loan at ${rate}% over ${months} months, your fixed monthly payment is ₹${(res.monthly_emi || 0).toLocaleString()} (Total interest: ₹${(res.total_interest || 0).toLocaleString()}).`;
+      }
+
+      this.renderEmiChart(res);
     }).catch(e => console.warn('EMI calculation error:', e));
   },
 
+  resetEMI: function() {
+    const pEl = document.getElementById('calc-emi-principal');
+    const rEl = document.getElementById('calc-emi-rate');
+    const mEl = document.getElementById('calc-emi-months');
+    if (pEl) pEl.value = 500000;
+    if (rEl) rEl.value = 10.5;
+    if (mEl) mEl.value = 36;
+    this.calculateEMI();
+  },
+
+  renderEmiChart: function(res) {
+    const ctx = document.getElementById('calc-emi-chart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (this.state.calcCharts && this.state.calcCharts.emi) {
+      this.state.calcCharts.emi.destroy();
+      this.state.calcCharts.emi = null;
+    }
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+    const p = res.principal || 0;
+    const i = res.total_interest || 0;
+
+    this.state.calcCharts.emi = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Principal Loan', 'Total Interest'],
+        datasets: [{
+          data: [p, i],
+          backgroundColor: ['#16a34a', '#f59e0b'],
+          borderColor: isDark ? '#020617' : '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              padding: 12,
+              color: textColor,
+              font: { size: 11, weight: '500' }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(item) {
+                const total = p + i;
+                const pct = total > 0 ? ((item.parsed / total) * 100).toFixed(1) : 0;
+                return ` ${item.label}: ₹${item.parsed.toLocaleString()} (${pct}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  },
+
+  // 2. Compound Interest Calculator
   calculateCI: function() {
     const pEl = document.getElementById('calc-ci-principal');
     const rEl = document.getElementById('calc-ci-rate');
     const yEl = document.getElementById('calc-ci-years');
+    const fEl = document.getElementById('calc-ci-freq');
     if (!pEl || !rEl || !yEl) return;
-    const principal = parseFloat(pEl.value) || 0;
-    const rate = parseFloat(rEl.value) || 0;
-    const years = parseFloat(yEl.value) || 0;
+    const principal = Math.max(0, parseFloat(pEl.value) || 0);
+    const rate = Math.max(0, parseFloat(rEl.value) || 0);
+    const years = Math.max(0, parseFloat(yEl.value) || 0);
+    const freq = fEl ? (parseInt(fEl.value) || 1) : 1;
 
     fetch('/api/calculators/ci', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ principal, rate, years })
+      body: JSON.stringify({ principal, rate, years, compound_freq: freq })
     }).then(r => r.json()).then(res => {
+      this.state.lastCiData = res;
       const tRes = document.getElementById('res-ci-total');
       const iRes = document.getElementById('res-ci-interest');
+      const pDisp = document.getElementById('res-ci-principal-display');
+      const mult = document.getElementById('res-ci-multiplier');
+      const desc = document.getElementById('res-ci-desc');
+
       if (tRes) tRes.textContent = (res.future_value || 0).toLocaleString();
       if (iRes) iRes.textContent = (res.interest_earned || 0).toLocaleString();
+      if (pDisp) pDisp.textContent = (res.initial_principal || 0).toLocaleString();
+      if (mult) mult.textContent = `${res.growth_multiplier || 1}x`;
+      if (desc) {
+        desc.textContent = `Your ₹${(res.initial_principal || 0).toLocaleString()} initial deposit multiplies to ₹${(res.future_value || 0).toLocaleString()} in ${years} years, gaining ₹${(res.interest_earned || 0).toLocaleString()} in compound interest.`;
+      }
+
+      this.renderCiChart(res);
     }).catch(e => console.warn('CI calculation error:', e));
   },
 
+  resetCI: function() {
+    const pEl = document.getElementById('calc-ci-principal');
+    const rEl = document.getElementById('calc-ci-rate');
+    const yEl = document.getElementById('calc-ci-years');
+    const fEl = document.getElementById('calc-ci-freq');
+    if (pEl) pEl.value = 100000;
+    if (rEl) rEl.value = 12;
+    if (yEl) yEl.value = 10;
+    if (fEl) fEl.value = 1;
+    this.calculateCI();
+  },
+
+  renderCiChart: function(res) {
+    const ctx = document.getElementById('calc-ci-chart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (this.state.calcCharts && this.state.calcCharts.ci) {
+      this.state.calcCharts.ci.destroy();
+      this.state.calcCharts.ci = null;
+    }
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.6)';
+
+    const schedule = res.yearly_schedule || [];
+    const labels = schedule.map(s => `Yr ${s.year}`);
+    const principals = schedule.map(s => s.principal);
+    const values = schedule.map(s => s.value);
+
+    this.state.calcCharts.ci = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels.length ? labels : ['Yr 0'],
+        datasets: [
+          {
+            label: 'Initial Principal',
+            data: principals.length ? principals : [res.initial_principal || 0],
+            borderColor: '#94a3b8',
+            borderDash: [4, 4],
+            pointRadius: 2,
+            borderWidth: 2,
+            fill: false
+          },
+          {
+            label: 'Total Future Value',
+            data: values.length ? values : [res.future_value || 0],
+            borderColor: '#3b82f6',
+            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)',
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.25
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              padding: 10,
+              color: textColor,
+              font: { size: 10, weight: '500' }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: item => ` ${item.dataset.label}: ₹${item.parsed.y.toLocaleString()}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: textColor, font: { size: 10 } },
+            grid: { color: gridColor }
+          },
+          y: {
+            ticks: {
+              color: textColor,
+              font: { size: 10 },
+              callback: v => '₹' + (v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v.toLocaleString())
+            },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+  },
+
+  // 3. Monthly Savings Growth (SIP) Calculator
+  calculateSavingsGrowth: function() {
+    const dEl = document.getElementById('calc-sip-deposit');
+    const rEl = document.getElementById('calc-sip-rate');
+    const yEl = document.getElementById('calc-sip-years');
+    if (!dEl || !rEl || !yEl) return;
+    const deposit = Math.max(0, parseFloat(dEl.value) || 0);
+    const rate = Math.max(0, parseFloat(rEl.value) || 0);
+    const years = Math.max(0, parseFloat(yEl.value) || 0);
+
+    fetch('/api/calculators/savings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deposit, rate, years })
+    }).then(r => r.json()).then(res => {
+      this.state.lastSipData = res;
+      const tRes = document.getElementById('res-sip-total');
+      const dRes = document.getElementById('res-sip-deposited');
+      const gRes = document.getElementById('res-sip-gain');
+      const pRes = document.getElementById('res-sip-pct');
+      const desc = document.getElementById('res-sip-desc');
+
+      if (tRes) tRes.textContent = (res.future_value || 0).toLocaleString();
+      if (dRes) dRes.textContent = (res.total_deposited || 0).toLocaleString();
+      if (gRes) gRes.textContent = (res.interest_earned || 0).toLocaleString();
+      if (pRes) pRes.textContent = `+${res.growth_pct || 0}%`;
+      if (desc) {
+        desc.textContent = `Depositing ₹${(res.monthly_deposit || 0).toLocaleString()} every month for ${years} years (total deposited ₹${(res.total_deposited || 0).toLocaleString()}) generates ₹${(res.interest_earned || 0).toLocaleString()} in returns at ${rate}% p.a.`;
+      }
+
+      this.renderSavingsGrowthChart(res);
+    }).catch(e => console.warn('Savings growth calculation error:', e));
+  },
+
+  resetSavingsGrowth: function() {
+    const dEl = document.getElementById('calc-sip-deposit');
+    const rEl = document.getElementById('calc-sip-rate');
+    const yEl = document.getElementById('calc-sip-years');
+    if (dEl) dEl.value = 5000;
+    if (rEl) rEl.value = 12;
+    if (yEl) yEl.value = 10;
+    this.calculateSavingsGrowth();
+  },
+
+  renderSavingsGrowthChart: function(res) {
+    const ctx = document.getElementById('calc-sip-chart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (this.state.calcCharts && this.state.calcCharts.sip) {
+      this.state.calcCharts.sip.destroy();
+      this.state.calcCharts.sip = null;
+    }
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.6)';
+
+    const schedule = res.yearly_schedule || [];
+    const labels = schedule.map(s => `Yr ${s.year}`);
+    const deposits = schedule.map(s => s.deposited);
+    const values = schedule.map(s => s.future_value);
+
+    this.state.calcCharts.sip = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels.length ? labels : ['Yr 1'],
+        datasets: [
+          {
+            label: 'Total Deposited',
+            data: deposits.length ? deposits : [res.total_deposited || 0],
+            borderColor: '#64748b',
+            borderDash: [3, 3],
+            pointRadius: 2,
+            borderWidth: 2,
+            fill: false
+          },
+          {
+            label: 'Projected Wealth',
+            data: values.length ? values : [res.future_value || 0],
+            borderColor: '#10b981',
+            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.08)',
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.25
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              padding: 10,
+              color: textColor,
+              font: { size: 10, weight: '500' }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: item => ` ${item.dataset.label}: ₹${item.parsed.y.toLocaleString()}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: textColor, font: { size: 10 } },
+            grid: { color: gridColor }
+          },
+          y: {
+            ticks: {
+              color: textColor,
+              font: { size: 10 },
+              callback: v => '₹' + (v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v.toLocaleString())
+            },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+  },
+
+  // 4. Inflation & Future Cost Calculator
   calculateInflation: function() {
     const cEl = document.getElementById('calc-inf-cost');
     const rEl = document.getElementById('calc-inf-rate');
     const yEl = document.getElementById('calc-inf-years');
     if (!cEl || !rEl || !yEl) return;
-    const cost = parseFloat(cEl.value) || 0;
-    const rate = parseFloat(rEl.value) || 0;
-    const years = parseFloat(yEl.value) || 0;
+    const cost = Math.max(0, parseFloat(cEl.value) || 0);
+    const rate = Math.max(0, parseFloat(rEl.value) || 0);
+    const years = Math.max(0, parseFloat(yEl.value) || 0);
 
     fetch('/api/calculators/inflation', {
       method: 'POST',
@@ -3737,8 +4139,48 @@ const MoneyTrackApp = {
       body: JSON.stringify({ cost, rate, years })
     }).then(r => r.json()).then(res => {
       const fRes = document.getElementById('res-inf-future');
-      if (fRes) fRes.textContent = (res.future_cost || 0).toLocaleString();
+      const cDisp = document.getElementById('res-inf-current-display');
+      const iRes = document.getElementById('res-inf-increase');
+      const iPct = document.getElementById('res-inf-increase-pct');
+      const lBadge = document.getElementById('res-inf-loss-badge');
+      const retText = document.getElementById('res-inf-retention-text');
+      const retBar = document.getElementById('res-inf-retained-bar');
+      const lostBar = document.getElementById('res-inf-lost-bar');
+      const retVal = document.getElementById('res-inf-retained-val');
+      const lostVal = document.getElementById('res-inf-lost-val');
+      const desc = document.getElementById('res-inf-desc');
+
+      const futureCost = res.future_cost || 0;
+      const currentCost = res.current_cost || cost;
+      const priceInc = res.price_increase || Math.max(0, futureCost - currentCost);
+      const lossPct = res.purchasing_power_loss_pct || 0;
+      const retainedPct = Math.max(0, (100 - lossPct)).toFixed(1);
+      const incPct = currentCost > 0 ? ((priceInc / currentCost) * 100).toFixed(1) : '0.0';
+
+      if (fRes) fRes.textContent = futureCost.toLocaleString();
+      if (cDisp) cDisp.textContent = currentCost.toLocaleString();
+      if (iRes) iRes.textContent = priceInc.toLocaleString();
+      if (iPct) iPct.textContent = `(+${incPct}%)`;
+      if (lBadge) lBadge.textContent = `-${lossPct}%`;
+      if (retText) retText.textContent = `${retainedPct}% retained`;
+      if (retBar) retBar.style.width = `${retainedPct}%`;
+      if (lostBar) lostBar.style.width = `${lossPct}%`;
+      if (retVal) retVal.textContent = `${retainedPct}%`;
+      if (lostVal) lostVal.textContent = `${lossPct}%`;
+      if (desc) {
+        desc.textContent = `An item costing ₹${currentCost.toLocaleString()} today will require ₹${futureCost.toLocaleString()} in ${years} years at ${rate}% annual inflation (a +${incPct}% price increase).`;
+      }
     }).catch(e => console.warn('Inflation calculation error:', e));
+  },
+
+  resetInflation: function() {
+    const cEl = document.getElementById('calc-inf-cost');
+    const rEl = document.getElementById('calc-inf-rate');
+    const yEl = document.getElementById('calc-inf-years');
+    if (cEl) cEl.value = 50000;
+    if (rEl) rEl.value = 6.0;
+    if (yEl) yEl.value = 10;
+    this.calculateInflation();
   },
 
   // Quizzes & Learning

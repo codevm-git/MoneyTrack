@@ -5,8 +5,8 @@
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Requirement:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/TASKS.md`  
-**Current Release Version:** `v0.8.4-beta` 
-**Test Suite Status:** 86/86 Tests Passing (`python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.6-beta` 
+**Test Suite Status:** 101/101 Tests Passing (`python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -43,8 +43,12 @@ gantt
     Wallets, Deposits, Withdrawals & GUI:done, p8_1, 2026-11-08, 2026-11-08
     section Phase 9: Financial Planner & Analytics
     Logic Fix, UI/UX & Live Analytics   :done, p9_1, 2026-11-21, 2026-11-21
+    section Phase 10: Money Calendar & Analytics
+    Calendar Redesign & MoM Visualizer  :done, p10_1, 2026-11-21, 2026-11-21
+    section Phase 11: Financial Calculators
+    Simplified UI/UX & Visual Charts    :done, p11_1, 2026-11-21, 2026-11-21
     section Future Roadmap
-    Standalone OS Binaries (PyInstaller):p10_1, 2026-11-28, 14d
+    Standalone OS Binaries (PyInstaller):p12_1, 2026-11-28, 14d
 ```
 
 ### Milestone Progress Summary
@@ -61,6 +65,8 @@ gantt
 | **Phase 7** | Money & Transactions Management | **Completed (100%)** | Account creation guard, wallet-to-wallet transfers, opening balance accuracy, custom transaction edit GUI, 65/65 tests passing. |
 | **Phase 8** | Savings Goals & Dedicated Wallets | **Completed (100%)** | Dedicated savings wallets, flexible Add/Withdraw money, non-destructive fund return on deletion, transfer integration, custom modals, 73/73 tests passing. |
 | **Phase 9** | Financial Planner (Scenarios & Affordability) | **Completed (100%)** | Real financial data integration, account-specific checking, goal wallet protection, commitments & budget bounds, green highlight fix, local Chart.js analytics, 86/86 tests passing. |
+| **Phase 10** | Money Calendar & Real-Time Analytics | **Completed (100%)** | Pure database ledger querying, daily activity indicators, Sunday-first navigation, selected-date drawer, MoM delta engine, trend visualizer line graph, 98/98 tests passing. |
+| **Phase 11** | Financial Calculators & Wealth Planning | **Completed (100%)** | Verified math formulas, added Monthly Savings Growth (SIP), category filter tabs, educational guidance accordions, quick scenario presets, instant calculation, visual Chart.js graphs, 101/101 tests passing. |
 | **Backlog** | Standalone Desktop Packaging | **Planned** | Standalone PyInstaller / AppImage distribution. |
 
 ---
@@ -404,13 +410,33 @@ gantt
 
 ---
 
-## Phase 11 — Future Packaging & Distribution (Planned)
+## Phase 11 — Financial Calculators & Wealth Planning (Completed)
 
-- [ ] **TASK-1101: PyInstaller Standalone Windows Executable**
+- [x] **TASK-1101: Review and Verify Calculation Formulas & Add Savings Growth**
+  - **Description:** Verified exact mathematical formulas for Loan Reducing Balance EMI, Compound Interest, and Inflation. Added Monthly Savings Growth (SIP / Recurring Deposit) calculating monthly compounding wealth accumulation ($FV = P \cdot \frac{(1+r)^n - 1}{r} \cdot (1+r)$). Added REST API endpoint `POST /api/calculators/savings`.
+  - **Verification:** Verified in `app/services/calculator_service.py`, `app/routes/api.py`, and `tests/test_calculators.py`.
+- [x] **TASK-1102: Simplified UI/UX with Educational Guidance & Presets**
+  - **Description:** Redesigned calculator cards with plain-English terminology, tooltips, and collapsible guidance accordions answering "What is this used for?", "What information do I need?", and "What does the result mean?". Added realistic one-click scenario presets for loans, fixed deposits, index funds, monthly SIPs, and inflation periods.
+  - **Verification:** Verified in `templates/index.html` and `static/js/app.js`.
+- [x] **TASK-1103: Instant Recalculation, Calculate & Reset Controls**
+  - **Description:** Wired real-time recalculation on input change (`oninput`) with sub-10ms response, accompanied by dedicated `Calculate` and `Reset` buttons for each calculator. Added top filter pills (`All Tools`, `Loan EMI`, `Compound Interest`, `Monthly Savings`, `Inflation Cost`) to quickly switch focus.
+  - **Verification:** Verified in `templates/index.html` and `static/js/app.js`.
+- [x] **TASK-1104: Clear Results Breakdown & Dynamic Chart.js Visualizations**
+  - **Description:** Prominently highlighted primary results with large font badges and plain-English summary sentences. Built detailed breakdown cards (Principal vs Interest %, Wealth Multipliers, Total Deposited vs Wealth, Purchasing Power Erosion). Integrated responsive offline Chart.js visualizations: EMI Doughnut composition chart, Compound Interest growth line graph, Monthly Savings (SIP) line graph, and Inflation purchasing power retention meter. Full dark/light theme awareness.
+  - **Verification:** Verified in `static/js/app.js` and `templates/index.html`.
+- [x] **TASK-1105: Comprehensive Unit & API Testing (101/101 Tests Passing)**
+  - **Description:** Created unit tests in `tests/test_calculators.py` for `calculate_savings_growth`, zero interest rate, zero tenure, and schedule generation. Added API test in `tests/test_api.py` for `/api/calculators/savings`. Entire project test suite achieves 101/101 passing tests with zero errors.
+  - **Verification:** Verified via `python3 -m unittest discover -s tests` (Ran 101 tests, OK).
+
+---
+
+## Phase 12 — Future Packaging & Distribution (Planned)
+
+- [ ] **TASK-1201: PyInstaller Standalone Windows Executable**
   - **Description:** Package MoneyTrack as a single-file portable `.exe` bundle for offline Windows execution.
   - **Priority:** Medium
   - **Dependencies:** None (App is fully functional via `python run.py`).
-- [ ] **TASK-1102: Linux AppImage / Debian Package**
+- [ ] **TASK-1202: Linux AppImage / Debian Package**
   - **Description:** Package MoneyTrack with desktop launcher integration for Linux workstations.
   - **Priority:** Medium
   - **Dependencies:** None.

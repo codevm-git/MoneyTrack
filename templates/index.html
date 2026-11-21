@@ -1392,122 +1392,596 @@
       </section>
 
       <!-- ========================================== -->
-      <!-- VIEW 8: FINANCIAL CALCULATORS -->
+      <!-- VIEW 8: FINANCIAL CALCULATORS & WEALTH PLANNING -->
       <!-- ========================================== -->
-      <section id="view-tools" class="view-panel space-y-8 hidden">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Financial Calculators</h2>
-          <p class="text-xs text-slate-500 dark:text-slate-400">Instant offline calculators for loans, interest, inflation, and wealth growth.</p>
+      <section id="view-tools" class="view-panel space-y-6 hidden">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <svg class="w-7 h-7 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
+              <span>Financial Calculators & Wealth Planning</span>
+            </h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Simple, visual, and accurate offline tools to calculate loans, compound interest, monthly savings, and inflation impact.</p>
+          </div>
+
+          <!-- Category Filter Tabs -->
+          <div class="flex flex-wrap items-center gap-1.5 p-1 bg-gray-100 dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 text-xs">
+            <button type="button" onclick="MoneyTrackApp.filterCalculators('all')" id="calc-tab-all" class="calc-tab-btn px-3 py-1.5 rounded-lg font-semibold bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm transition-all">All Tools</button>
+            <button type="button" onclick="MoneyTrackApp.filterCalculators('emi')" id="calc-tab-emi" class="calc-tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">Loan EMI</button>
+            <button type="button" onclick="MoneyTrackApp.filterCalculators('ci')" id="calc-tab-ci" class="calc-tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">Compound Interest</button>
+            <button type="button" onclick="MoneyTrackApp.filterCalculators('sip')" id="calc-tab-sip" class="calc-tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">Monthly Savings</button>
+            <button type="button" onclick="MoneyTrackApp.filterCalculators('inflation')" id="calc-tab-inflation" class="calc-tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">Inflation Cost</button>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-          <!-- 1. EMI Calculator -->
-          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
-            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-              <svg class="w-5 h-5 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/></svg>
-              <span>EMI Loan Calculator</span>
-            </h3>
+          <!-- 1. EMI Calculator Card -->
+          <div id="calc-card-emi" class="calc-card p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-5 transition-all">
+            <div class="flex items-start justify-between">
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <div class="p-2 rounded-xl bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400">
+                    <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/></svg>
+                  </div>
+                  <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">Loan EMI Calculator</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Calculate exact monthly payments and interest costs for any loan.</p>
+                  </div>
+                </div>
+              </div>
+              <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">Loan Planning</span>
+            </div>
 
+            <!-- Guidance Accordion -->
+            <details class="group bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 border border-gray-200/80 dark:border-slate-800/80 text-xs transition-all">
+              <summary class="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between list-none">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  How does this loan calculator work?
+                </span>
+                <svg class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </summary>
+              <div class="mt-2.5 pt-2 border-t border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 space-y-1.5 text-[11px] leading-relaxed">
+                <p><strong>What is this used for?</strong> Estimate monthly installments for home, vehicle, education, or personal loans.</p>
+                <p><strong>What information do I need?</strong> The loan amount borrowed, the bank's annual interest rate, and total repayment tenure.</p>
+                <p><strong>What does the result mean?</strong> Shows your fixed monthly installment (EMI), total interest paid to the lender, and principal repayment share.</p>
+              </div>
+            </details>
+
+            <!-- Quick Presets -->
+            <div class="space-y-1.5">
+              <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Quick Scenarios:</span>
+              <div class="flex flex-wrap gap-1.5">
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('emi', 2500000, 8.5, 240)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Home Loan (25L @ 8.5%, 20y)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('emi', 800000, 9.5, 60)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Car Loan (8L @ 9.5%, 5y)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('emi', 200000, 12.5, 36)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Personal Loan (2L @ 12.5%, 3y)</button>
+              </div>
+            </div>
+
+            <!-- Inputs -->
             <div class="space-y-3">
               <div>
-                <label class="block text-xs font-medium text-slate-500 mb-1">Loan Amount (<span class="currency-symbol">₹</span>)</label>
-                <input type="number" id="calc-emi-principal" value="500000" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                <div class="flex justify-between items-center mb-1">
+                  <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Loan Amount (<span class="currency-symbol">₹</span>)</label>
+                  <span class="text-[11px] text-slate-400">Principal borrowed</span>
+                </div>
+                <input type="number" id="calc-emi-principal" value="500000" min="0" step="1000" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500">
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-medium text-slate-500 mb-1">Interest Rate (% p.a)</label>
-                  <input type="number" step="0.1" id="calc-emi-rate" value="10.5" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Interest Rate</label>
+                    <span class="text-[11px] text-slate-400">% p.a.</span>
+                  </div>
+                  <input type="number" step="0.1" id="calc-emi-rate" value="10.5" min="0" max="100" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500">
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-slate-500 mb-1">Tenure (Months)</label>
-                  <input type="number" id="calc-emi-months" value="36" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Tenure</label>
+                    <span class="text-[11px] text-slate-400">Months</span>
+                  </div>
+                  <input type="number" id="calc-emi-months" value="36" min="1" max="600" oninput="MoneyTrackApp.calculateEMI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500">
                 </div>
+              </div>
+
+              <!-- Button Bar -->
+              <div class="flex items-center gap-2 pt-1">
+                <button type="button" onclick="MoneyTrackApp.calculateEMI()" class="flex-1 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                  Calculate EMI
+                </button>
+                <button type="button" onclick="MoneyTrackApp.resetEMI()" class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors">
+                  Reset
+                </button>
               </div>
             </div>
 
-            <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2 text-xs">
-              <div class="flex justify-between">
-                <span class="text-slate-500">Monthly EMI</span>
-                <span class="font-bold text-brand-600 dark:text-brand-400 text-sm"><span class="currency-symbol">₹</span><span id="res-emi-monthly">16,251</span></span>
+            <!-- Result Highlight Card -->
+            <div class="p-4 rounded-xl bg-gradient-to-br from-brand-50/60 to-slate-50 dark:from-brand-950/20 dark:to-slate-900 border border-brand-200 dark:border-brand-900/40 space-y-3">
+              <div class="flex items-baseline justify-between">
+                <div>
+                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Monthly EMI Payment</span>
+                  <div class="text-2xl font-extrabold text-brand-600 dark:text-brand-400">
+                    <span class="currency-symbol">₹</span><span id="res-emi-monthly">16,251</span>
+                    <span class="text-xs font-normal text-slate-500 dark:text-slate-400">/ month</span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Total Payable</span>
+                  <div class="text-sm font-bold text-slate-900 dark:text-white">
+                    <span class="currency-symbol">₹</span><span id="res-emi-total">585,044</span>
+                  </div>
+                </div>
               </div>
-              <div class="flex justify-between">
-                <span class="text-slate-500">Total Interest Payable</span>
-                <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="res-emi-interest">85,044</span></span>
+
+              <!-- Explanation Text -->
+              <p id="res-emi-desc" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-white/70 dark:bg-slate-950/70 p-2.5 rounded-lg border border-gray-100 dark:border-slate-800/80">
+                For a ₹5,00,000 loan at 10.5% over 36 months, your fixed monthly payment is ₹16,251.
+              </p>
+
+              <!-- Breakdown Grid -->
+              <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Principal Repaid</div>
+                  <div class="font-bold text-slate-900 dark:text-white mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-emi-principal-display">500,000</span>
+                    <span id="res-emi-principal-pct" class="text-[10px] text-brand-600 dark:text-brand-400 font-semibold ml-1">(85.5%)</span>
+                  </div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Total Interest Payable</div>
+                  <div class="font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-emi-interest">85,044</span>
+                    <span id="res-emi-interest-pct" class="text-[10px] text-amber-600 dark:text-amber-400 font-semibold ml-1">(14.5%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Visual Breakdown Chart -->
+              <div class="pt-2">
+                <div class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
+                  <span>Repayment Composition</span>
+                  <span class="text-[10px] text-slate-400 font-normal">Principal vs Interest</span>
+                </div>
+                <div class="relative h-44 w-full flex items-center justify-center">
+                  <canvas id="calc-emi-chart"></canvas>
+                </div>
+              </div>
+
+              <div class="text-[10px] text-slate-400 dark:text-slate-500 text-right">
+                *Exact calculation using standard reducing balance amortization.
               </div>
             </div>
           </div>
 
-          <!-- 2. Compound Interest Calculator -->
-          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
-            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-              <svg class="w-5 h-5 text-accent-blue stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
-              <span>Compound Interest Calculator</span>
-            </h3>
+          <!-- 2. Compound Interest Calculator Card -->
+          <div id="calc-card-ci" class="calc-card p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-5 transition-all">
+            <div class="flex items-start justify-between">
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <div class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-accent-blue">
+                    <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+                  </div>
+                  <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">Compound Interest Calculator</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">See how a lump-sum investment multiplies with compounding returns.</p>
+                  </div>
+                </div>
+              </div>
+              <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Lump-Sum Growth</span>
+            </div>
 
+            <!-- Guidance Accordion -->
+            <details class="group bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 border border-gray-200/80 dark:border-slate-800/80 text-xs transition-all">
+              <summary class="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between list-none">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  How does compound growth work?
+                </span>
+                <svg class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </summary>
+              <div class="mt-2.5 pt-2 border-t border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 space-y-1.5 text-[11px] leading-relaxed">
+                <p><strong>What is this used for?</strong> Project returns on one-time investments like Fixed Deposits, mutual funds, and stock portfolios.</p>
+                <p><strong>What information do I need?</strong> Initial investment amount, expected annual growth rate, and investment tenure in years.</p>
+                <p><strong>What does the result mean?</strong> Shows how your money grows exponentially as returns generate their own returns year after year.</p>
+              </div>
+            </details>
+
+            <!-- Quick Presets -->
+            <div class="space-y-1.5">
+              <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Quick Scenarios:</span>
+              <div class="flex flex-wrap gap-1.5">
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('ci', 100000, 7.0, 5, 1)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Fixed Deposit (1L @ 7%, 5y)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('ci', 100000, 12.0, 10, 1)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Index Fund (1L @ 12%, 10y)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('ci', 500000, 12.0, 20, 1)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Long-Term (5L @ 12%, 20y)</button>
+              </div>
+            </div>
+
+            <!-- Inputs -->
             <div class="space-y-3">
               <div>
-                <label class="block text-xs font-medium text-slate-500 mb-1">Initial Principal (<span class="currency-symbol">₹</span>)</label>
-                <input type="number" id="calc-ci-principal" value="100000" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                <div class="flex justify-between items-center mb-1">
+                  <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Initial Principal (<span class="currency-symbol">₹</span>)</label>
+                  <span class="text-[11px] text-slate-400">One-time deposit</span>
+                </div>
+                <input type="number" id="calc-ci-principal" value="100000" min="0" step="1000" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+
+              <div class="grid grid-cols-3 gap-2">
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Annual Rate</label>
+                  </div>
+                  <input type="number" step="0.1" id="calc-ci-rate" value="12" min="0" max="100" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="% p.a.">
+                </div>
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Years</label>
+                  </div>
+                  <input type="number" id="calc-ci-years" value="10" min="1" max="100" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Years">
+                </div>
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Compounding</label>
+                  </div>
+                  <select id="calc-ci-freq" onchange="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="1" selected>Annually</option>
+                    <option value="2">Semi-annual</option>
+                    <option value="4">Quarterly</option>
+                    <option value="12">Monthly</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Button Bar -->
+              <div class="flex items-center gap-2 pt-1">
+                <button type="button" onclick="MoneyTrackApp.calculateCI()" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                  Calculate Growth
+                </button>
+                <button type="button" onclick="MoneyTrackApp.resetCI()" class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors">
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            <!-- Result Highlight Card -->
+            <div class="p-4 rounded-xl bg-gradient-to-br from-blue-50/60 to-slate-50 dark:from-blue-950/20 dark:to-slate-900 border border-blue-200 dark:border-blue-900/40 space-y-3">
+              <div class="flex items-baseline justify-between">
+                <div>
+                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Projected Maturity Value</span>
+                  <div class="text-2xl font-extrabold text-blue-600 dark:text-blue-400">
+                    <span class="currency-symbol">₹</span><span id="res-ci-total">310,585</span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Wealth Multiplier</span>
+                  <div>
+                    <span id="res-ci-multiplier" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">3.11x</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Explanation Text -->
+              <p id="res-ci-desc" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-white/70 dark:bg-slate-950/70 p-2.5 rounded-lg border border-gray-100 dark:border-slate-800/80">
+                Your ₹1,00,000 lump sum grows to ₹3,10,585 in 10 years, gaining ₹2,10,585 in compound growth.
+              </p>
+
+              <!-- Breakdown Grid -->
+              <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Initial Deposit</div>
+                  <div class="font-bold text-slate-900 dark:text-white mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-ci-principal-display">100,000</span>
+                  </div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Interest Earned</div>
+                  <div class="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-ci-interest">210,585</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Visual Growth Line Graph -->
+              <div class="pt-2">
+                <div class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
+                  <span>Wealth Accumulation Over Time</span>
+                  <span class="text-[10px] text-slate-400 font-normal">Principal vs Future Value</span>
+                </div>
+                <div class="relative h-44 w-full">
+                  <canvas id="calc-ci-chart"></canvas>
+                </div>
+              </div>
+
+              <div class="text-[10px] text-slate-400 dark:text-slate-500 text-right">
+                *Estimated projection assuming steady annual return rate without taxes.
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Monthly Savings Growth (SIP) Calculator Card -->
+          <div id="calc-card-sip" class="calc-card p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-5 transition-all">
+            <div class="flex items-start justify-between">
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <div class="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                    <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  </div>
+                  <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">Monthly Savings Growth (SIP)</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">See how investing a fixed monthly amount compounds into huge wealth.</p>
+                  </div>
+                </div>
+              </div>
+              <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Disciplined Savings</span>
+            </div>
+
+            <!-- Guidance Accordion -->
+            <details class="group bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 border border-gray-200/80 dark:border-slate-800/80 text-xs transition-all">
+              <summary class="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between list-none">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  Why invest a fixed amount monthly?
+                </span>
+                <svg class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </summary>
+              <div class="mt-2.5 pt-2 border-t border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 space-y-1.5 text-[11px] leading-relaxed">
+                <p><strong>What is this used for?</strong> Systematic Investment Plans (SIP), Recurring Deposits (RD), or disciplined monthly wealth accumulation.</p>
+                <p><strong>What information do I need?</strong> Amount saved each month, expected annual return rate, and investment horizon.</p>
+                <p><strong>What does the result mean?</strong> Demonstrates how small regular deposits compound over time through rupee-cost averaging.</p>
+              </div>
+            </details>
+
+            <!-- Quick Presets -->
+            <div class="space-y-1.5">
+              <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Quick Scenarios:</span>
+              <div class="flex flex-wrap gap-1.5">
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('sip', 3000, 12.0, 10)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Starter SIP (₹3,000/mo, 10y @ 12%)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('sip', 10000, 12.0, 15)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Balanced SIP (₹10,000/mo, 15y @ 12%)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('sip', 25000, 12.0, 20)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Wealth SIP (₹25,000/mo, 20y @ 12%)</button>
+              </div>
+            </div>
+
+            <!-- Inputs -->
+            <div class="space-y-3">
+              <div>
+                <div class="flex justify-between items-center mb-1">
+                  <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Monthly Contribution (<span class="currency-symbol">₹</span>)</label>
+                  <span class="text-[11px] text-slate-400">Saved each month</span>
+                </div>
+                <input type="number" id="calc-sip-deposit" value="5000" min="0" step="500" oninput="MoneyTrackApp.calculateSavingsGrowth()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-medium text-slate-500 mb-1">Annual Rate (%)</label>
-                  <input type="number" step="0.1" id="calc-ci-rate" value="12" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Expected Return</label>
+                    <span class="text-[11px] text-slate-400">% p.a.</span>
+                  </div>
+                  <input type="number" step="0.1" id="calc-sip-rate" value="12" min="0" max="100" oninput="MoneyTrackApp.calculateSavingsGrowth()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-slate-500 mb-1">Years</label>
-                  <input type="number" id="calc-ci-years" value="10" oninput="MoneyTrackApp.calculateCI()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Investment Horizon</label>
+                    <span class="text-[11px] text-slate-400">Years</span>
+                  </div>
+                  <input type="number" id="calc-sip-years" value="10" min="1" max="60" oninput="MoneyTrackApp.calculateSavingsGrowth()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                 </div>
+              </div>
+
+              <!-- Button Bar -->
+              <div class="flex items-center gap-2 pt-1">
+                <button type="button" onclick="MoneyTrackApp.calculateSavingsGrowth()" class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  Calculate Savings
+                </button>
+                <button type="button" onclick="MoneyTrackApp.resetSavingsGrowth()" class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors">
+                  Reset
+                </button>
               </div>
             </div>
 
-            <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2 text-xs">
-              <div class="flex justify-between">
-                <span class="text-slate-500">Future Total Value</span>
-                <span class="font-bold text-accent-blue text-sm"><span class="currency-symbol">₹</span><span id="res-ci-total">310,585</span></span>
+            <!-- Result Highlight Card -->
+            <div class="p-4 rounded-xl bg-gradient-to-br from-emerald-50/60 to-slate-50 dark:from-emerald-950/20 dark:to-slate-900 border border-emerald-200 dark:border-emerald-900/40 space-y-3">
+              <div class="flex items-baseline justify-between">
+                <div>
+                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Projected Wealth</span>
+                  <div class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                    <span class="currency-symbol">₹</span><span id="res-sip-total">1,161,695</span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Return on Investment</span>
+                  <div>
+                    <span id="res-sip-pct" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">+93.6%</span>
+                  </div>
+                </div>
               </div>
-              <div class="flex justify-between">
-                <span class="text-slate-500">Total Interest Earned</span>
-                <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="res-ci-interest">210,585</span></span>
+
+              <!-- Explanation Text -->
+              <p id="res-sip-desc" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-white/70 dark:bg-slate-950/70 p-2.5 rounded-lg border border-gray-100 dark:border-slate-800/80">
+                Depositing ₹5,000 every month for 10 years (total deposited ₹6,00,000) generates ₹5,61,695 in returns at 12% p.a.
+              </p>
+
+              <!-- Breakdown Grid -->
+              <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Total Money Deposited</div>
+                  <div class="font-bold text-slate-900 dark:text-white mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-sip-deposited">600,000</span>
+                  </div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Wealth Gain (Returns)</div>
+                  <div class="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-sip-gain">561,695</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Visual Growth Line Graph -->
+              <div class="pt-2">
+                <div class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
+                  <span>Growth Trajectory (Deposited vs Wealth)</span>
+                  <span class="text-[10px] text-slate-400 font-normal">Monthly Compounding</span>
+                </div>
+                <div class="relative h-44 w-full">
+                  <canvas id="calc-sip-chart"></canvas>
+                </div>
+              </div>
+
+              <div class="text-[10px] text-slate-400 dark:text-slate-500 text-right">
+                *Projections assume monthly compounding. Actual mutual fund returns fluctuate with markets.
               </div>
             </div>
           </div>
 
-          <!-- 3. Inflation Calculator -->
-          <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
-            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-              <svg class="w-5 h-5 text-accent-rose stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-              <span>Inflation Impact Calculator</span>
-            </h3>
+          <!-- 4. Inflation Calculator Card -->
+          <div id="calc-card-inflation" class="calc-card p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-5 transition-all">
+            <div class="flex items-start justify-between">
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <div class="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-accent-rose">
+                    <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                  </div>
+                  <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">Inflation Impact & Future Cost</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Discover how rising prices erode your money's buying power over time.</p>
+                  </div>
+                </div>
+              </div>
+              <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Cost of Living</span>
+            </div>
 
+            <!-- Guidance Accordion -->
+            <details class="group bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 border border-gray-200/80 dark:border-slate-800/80 text-xs transition-all">
+              <summary class="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between list-none">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  How does inflation erode purchasing power?
+                </span>
+                <svg class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </summary>
+              <div class="mt-2.5 pt-2 border-t border-gray-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 space-y-1.5 text-[11px] leading-relaxed">
+                <p><strong>What is this used for?</strong> Plan for future lifestyle costs, children's education, retirement needs, and understand the real cost of living.</p>
+                <p><strong>What information do I need?</strong> Today's price for an expense or item, expected annual inflation rate, and future horizon.</p>
+                <p><strong>What does the result mean?</strong> Shows how much more money you'll need in the future to maintain your current standard of living.</p>
+              </div>
+            </details>
+
+            <!-- Quick Presets -->
+            <div class="space-y-1.5">
+              <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Quick Scenarios:</span>
+              <div class="flex flex-wrap gap-1.5">
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('inflation', 50000, 6.0, 5)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-rose-50 hover:text-rose-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Near Term (5y @ 6%)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('inflation', 50000, 6.0, 10)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-rose-50 hover:text-rose-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Medium Term (10y @ 6%)</button>
+                <button type="button" onclick="MoneyTrackApp.setCalcPreset('inflation', 50000, 7.0, 20)" class="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-rose-50 hover:text-rose-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 transition-colors">Long Term (20y @ 7%)</button>
+              </div>
+            </div>
+
+            <!-- Inputs -->
             <div class="space-y-3">
               <div>
-                <label class="block text-xs font-medium text-slate-500 mb-1">Current Purchasing Cost (<span class="currency-symbol">₹</span>)</label>
-                <input type="number" id="calc-inf-cost" value="50000" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                <div class="flex justify-between items-center mb-1">
+                  <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Current Purchasing Cost (<span class="currency-symbol">₹</span>)</label>
+                  <span class="text-[11px] text-slate-400">Price today</span>
+                </div>
+                <input type="number" id="calc-inf-cost" value="50000" min="0" step="500" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-medium text-slate-500 mb-1">Inflation Rate (%)</label>
-                  <input type="number" step="0.1" id="calc-inf-rate" value="6.0" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Inflation Rate</label>
+                    <span class="text-[11px] text-slate-400">% p.a.</span>
+                  </div>
+                  <input type="number" step="0.1" id="calc-inf-rate" value="6.0" min="0" max="50" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-slate-500 mb-1">Years Future</label>
-                  <input type="number" id="calc-inf-years" value="10" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">Future Years</label>
+                    <span class="text-[11px] text-slate-400">Years</span>
+                  </div>
+                  <input type="number" id="calc-inf-years" value="10" min="1" max="60" oninput="MoneyTrackApp.calculateInflation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500">
                 </div>
+              </div>
+
+              <!-- Button Bar -->
+              <div class="flex items-center gap-2 pt-1">
+                <button type="button" onclick="MoneyTrackApp.calculateInflation()" class="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>
+                  Calculate Inflation
+                </button>
+                <button type="button" onclick="MoneyTrackApp.resetInflation()" class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors">
+                  Reset
+                </button>
               </div>
             </div>
 
-            <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2 text-xs">
-              <div class="flex justify-between">
-                <span class="text-slate-500">Future Equivalent Cost</span>
-                <span class="font-bold text-accent-rose text-sm"><span class="currency-symbol">₹</span><span id="res-inf-future">89,542</span></span>
+            <!-- Result Highlight Card -->
+            <div class="p-4 rounded-xl bg-gradient-to-br from-rose-50/60 to-slate-50 dark:from-rose-950/20 dark:to-slate-900 border border-rose-200 dark:border-rose-900/40 space-y-3">
+              <div class="flex items-baseline justify-between">
+                <div>
+                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Future Equivalent Cost</span>
+                  <div class="text-2xl font-extrabold text-accent-rose">
+                    <span class="currency-symbol">₹</span><span id="res-inf-future">89,542</span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Purchasing Power Loss</span>
+                  <div>
+                    <span id="res-inf-loss-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300">-44.2%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Explanation Text -->
+              <p id="res-inf-desc" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-white/70 dark:bg-slate-950/70 p-2.5 rounded-lg border border-gray-100 dark:border-slate-800/80">
+                An item costing ₹50,000 today will cost ₹89,542 in 10 years at 6.0% inflation.
+              </p>
+
+              <!-- Breakdown Grid -->
+              <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Current Price</div>
+                  <div class="font-bold text-slate-900 dark:text-white mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-inf-current-display">50,000</span>
+                  </div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-gray-200/70 dark:border-slate-800">
+                  <div class="text-[11px] text-slate-500">Price Increase (Extra Needed)</div>
+                  <div class="font-bold text-rose-600 dark:text-rose-400 mt-0.5">
+                    <span class="currency-symbol">₹</span><span id="res-inf-increase">39,542</span>
+                    <span id="res-inf-increase-pct" class="text-[10px] text-rose-600 dark:text-rose-400 font-semibold ml-1">(+79.1%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Visual Purchasing Power Retention Bar -->
+              <div class="pt-2 space-y-2">
+                <div class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Purchasing Power Retention</span>
+                  <span id="res-inf-retention-text" class="text-[11px] font-bold text-slate-700 dark:text-slate-300">55.8% retained</span>
+                </div>
+                <div class="w-full h-3 rounded-full bg-rose-200 dark:bg-rose-950/80 overflow-hidden flex">
+                  <div id="res-inf-retained-bar" class="h-full bg-brand-500 dark:bg-brand-400 transition-all duration-500" style="width: 55.8%;"></div>
+                  <div id="res-inf-lost-bar" class="h-full bg-rose-500 transition-all duration-500" style="width: 44.2%;"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500">
+                  <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-brand-500 inline-block"></span> Retained Value (<span id="res-inf-retained-val">55.8%</span>)</span>
+                  <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500 inline-block"></span> Purchasing Loss (<span id="res-inf-lost-val">44.2%</span>)</span>
+                </div>
+              </div>
+
+              <div class="text-[10px] text-slate-400 dark:text-slate-500 text-right">
+                *Calculated using compound inflation. India's historical CPI average is ~5.5-6.5%.
               </div>
             </div>
           </div>
+
         </div>
       </section>
 

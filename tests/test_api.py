@@ -129,6 +129,12 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertEqual(inf_res.status_code, 200)
         self.assertEqual(inf_res.get_json()['future_cost'], 89542)
 
+        # Savings Growth (SIP)
+        sip_res = self.client.post('/api/calculators/savings', json={'deposit': 5000, 'rate': 12, 'years': 10})
+        self.assertEqual(sip_res.status_code, 200)
+        self.assertEqual(sip_res.get_json()['future_value'], 1161695)
+        self.assertEqual(sip_res.get_json()['total_deposited'], 600000)
+
     def test_learning_and_quizzes(self):
         # Lessons
         res_less = self.client.get('/api/learning/lessons')
