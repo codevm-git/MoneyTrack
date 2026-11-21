@@ -187,7 +187,7 @@ Client scripts operate as a cohesive reactive singleton controller:
    1. Dashboard (`#view-dashboard`)
    2. Money & Accounts (`#view-money`)
    3. Savings Goals (`#view-goals`)
-   4. Simulator & Affordability (`#view-simulator`)
+   4. Financial Planner (`#view-simulator`)
    5. Future Money Calendar (`#view-calendar`)
    6. Analytics & Trends (`#view-analytics`)
    7. Financial Literacy & Quizzes (`#view-learn`)
@@ -343,14 +343,17 @@ erDiagram
 
 ## 12. Verification & Testing
 
-The application architecture is verified by a 57-test automated test suite across 8 modules:
+The application architecture is verified by an 86-test automated test suite across 11 modules:
 - `tests/test_accounts.py` (8 tests)
-- `tests/test_api.py` (8 tests)
-- `tests/test_calculators.py` (3 tests)
+- `tests/test_api.py` (9 tests)
+- `tests/test_calculators.py` (6 tests)
 - `tests/test_dashboard_analytics_and_alerts.py` (7 tests)
 - `tests/test_e2e_workflows.py` (5 tests)
 - `tests/test_financial_service.py` (6 tests)
+- `tests/test_money_and_transactions.py` (8 tests)
+- `tests/test_savings_goals_wallets.py` (8 tests)
 - `tests/test_security_and_integrity.py` (12 tests)
-- `tests/test_username_auth.py` (8 tests)
+- `tests/test_simulator_and_affordability.py` (12 tests)
+- `tests/test_username_auth.py` (5 tests)
 
-Running `python3 -m unittest discover -s tests` confirms **57 tests ran and 57 passed (100% pass rate)**.
+Running `python3 -m unittest discover -s tests` confirms **86 tests ran and 86 passed (100% pass rate)**.

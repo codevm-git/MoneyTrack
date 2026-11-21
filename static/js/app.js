@@ -594,6 +594,12 @@ const MoneyTrackApp = {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    if (this.state.lastScenarioData) {
+      this.renderScenarioChart(this.state.lastScenarioData);
+    }
+    if (this.state.lastAffordData) {
+      this.renderAffordChart(this.state.lastAffordData);
+    }
   },
 
   // Navigation
@@ -626,6 +632,9 @@ const MoneyTrackApp = {
 
     if (viewId === 'analytics') {
       this.updateAnalyticsChart();
+    }
+    if (viewId === 'simulator') {
+      this.initSimulatorView();
     }
 
     this.renderAppVersionInfo();
@@ -687,6 +696,9 @@ const MoneyTrackApp = {
       this.renderCalendar();
       this.renderAchievements();
       this.renderAppVersionInfo();
+      if (this.state.currentTab === 'simulator') {
+        this.initSimulatorView();
+      }
       this.hideInAppLoader();
 
       // Check for any unnotified critical alerts and trigger notifications
@@ -1715,6 +1727,8 @@ const MoneyTrackApp = {
       });
       if (curVal) goalActionAcc.value = curVal;
     }
+
+    this.populateSimulatorAccounts();
   },
 
   openAddAccountModal: function() {
@@ -2786,104 +2800,593 @@ const MoneyTrackApp = {
     }
   },
 
-  // Simulator
+  // Financial Planner (Try a Scenario & Check Before You Buy)
+  initSimulatorView: function() {
+    this.populateSimulatorAccounts();
+    fetch('/api/simulate/baseline')
+      .then(r => r.json())
+      .then(base => {
+        this.state.simulatorBaseline = base;
+        const incEl = document.getElementById('sim-curr-inc-lbl');
+        const expEl = document.getElementById('sim-curr-exp-lbl');
+        const liqEl = document.getElementById('sim-curr-liquid-lbl');
+        if (incEl) incEl.textContent = Number(base.base_income || 0).toLocaleString();
+        if (expEl) expEl.textContent = Number(base.base_expenses || 0).toLocaleString();
+        if (liqEl) liqEl.textContent = Number(base.total_liquid_available || 0).toLocaleString();
+
+        // Populate category dropdowns
+        const affordCat = document.getElementById('afford-category-id');
+        const simCat = document.getElementById('sim-category-id');
+        if (affordCat) {
+          const curVal = affordCat.value;
+          affordCat.innerHTML = '<option value="">No Category Budget Constraint</option>';
+          (base.budgets || []).forEach(b => {
+            affordCat.innerHTML += `<option value="${b.category_id}">${this.escapeHtml(b.name)} (Limit: ₹${b.limit.toLocaleString()}, Left: ₹${b.remaining.toLocaleString()})</option>`;
+          });
+          if (curVal) affordCat.value = curVal;
+        }
+        if (simCat) {
+          const curVal = simCat.value;
+          simCat.innerHTML = '';
+          if (base.budgets && base.budgets.length > 0) {
+            base.budgets.forEach(b => {
+              simCat.innerHTML += `<option value="${b.category_id}">${this.escapeHtml(b.name)} (Spent: ₹${b.spent.toLocaleString()})</option>`;
+            });
+          } else {
+            const defaultCats = [
+              { id: '1', name: 'Food & Dining' },
+              { id: '2', name: 'Transport' },
+              { id: '3', name: 'Shopping' },
+              { id: '4', name: 'Bills & Utilities' },
+              { id: '6', name: 'Other' }
+            ];
+            defaultCats.forEach(c => {
+              simCat.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+            });
+          }
+          if (curVal) simCat.value = curVal;
+        }
+
+        // Run both
+        this.runSimulation();
+        this.evaluateAffordability();
+      }).catch(err => {
+        console.error("Error loading simulator baseline:", err);
+        this.runSimulation();
+        this.evaluateAffordability();
+      });
+  },
+
+  populateSimulatorAccounts: function() {
+    const affordAccount = document.getElementById('afford-account-id');
+    if (!affordAccount) return;
+    const curAffordVal = affordAccount.value;
+    affordAccount.innerHTML = '';
+    const accounts = this.state.accounts || [];
+    if (accounts.length === 0) {
+      affordAccount.innerHTML = '<option value="">No account available</option>';
+      return;
+    }
+    accounts.forEach(acc => {
+      let typeSuffix = '';
+      if (acc.is_savings_wallet) {
+        typeSuffix = ' [Goal Wallet - Locked]';
+      } else if (acc.account_type === 'credit_card') {
+        typeSuffix = ' [Credit Card - Liability]';
+      } else {
+        typeSuffix = ` [${acc.type_label}]`;
+      }
+      const sym = this.state.user?.currency || '₹';
+      affordAccount.innerHTML += `<option value="${acc.id}">${this.escapeHtml(acc.name)}${typeSuffix} — ${sym}${Number(acc.current_balance || 0).toLocaleString()}</option>`;
+    });
+
+    const defAcc = accounts.find(a => a.is_default && a.account_type !== 'credit_card' && !a.is_savings_wallet)
+      || accounts.find(a => a.account_type !== 'credit_card' && !a.is_savings_wallet)
+      || accounts[0];
+
+    if (curAffordVal && accounts.some(a => String(a.id) === String(curAffordVal))) {
+      affordAccount.value = curAffordVal;
+    } else if (defAcc) {
+      affordAccount.value = defAcc.id;
+    }
+  },
+
   switchSimulatorTab: function(tab) {
-    document.getElementById('sim-panel-scenario').classList.add('hidden');
-    document.getElementById('sim-panel-afford').classList.add('hidden');
-    document.getElementById('sim-tab-btn-scenario').classList.replace('text-brand-600', 'text-slate-400');
-    document.getElementById('sim-tab-btn-afford').classList.replace('text-brand-600', 'text-slate-400');
+    const scenarioPanel = document.getElementById('sim-panel-scenario');
+    const affordPanel = document.getElementById('sim-panel-afford');
+    const scenarioBtn = document.getElementById('sim-tab-btn-scenario');
+    const affordBtn = document.getElementById('sim-tab-btn-afford');
+
+    if (scenarioPanel) scenarioPanel.classList.add('hidden');
+    if (affordPanel) affordPanel.classList.add('hidden');
+    if (scenarioBtn) {
+      scenarioBtn.classList.replace('text-brand-600', 'text-slate-400');
+      scenarioBtn.classList.remove('border-brand-600');
+      scenarioBtn.classList.add('border-transparent');
+    }
+    if (affordBtn) {
+      affordBtn.classList.replace('text-brand-600', 'text-slate-400');
+      affordBtn.classList.remove('border-brand-600');
+      affordBtn.classList.add('border-transparent');
+    }
 
     if (tab === 'scenario') {
-      document.getElementById('sim-panel-scenario').classList.remove('hidden');
-      document.getElementById('sim-tab-btn-scenario').classList.replace('text-slate-400', 'text-brand-600');
+      if (scenarioPanel) scenarioPanel.classList.remove('hidden');
+      if (scenarioBtn) {
+        scenarioBtn.classList.replace('text-slate-400', 'text-brand-600');
+        scenarioBtn.classList.replace('border-transparent', 'border-brand-600');
+      }
+      this.runSimulation();
     } else {
-      document.getElementById('sim-panel-afford').classList.remove('hidden');
-      document.getElementById('sim-tab-btn-afford').classList.replace('text-slate-400', 'text-brand-600');
+      if (affordPanel) affordPanel.classList.remove('hidden');
+      if (affordBtn) {
+        affordBtn.classList.replace('text-slate-400', 'text-brand-600');
+        affordBtn.classList.replace('border-transparent', 'border-brand-600');
+      }
       this.evaluateAffordability();
     }
   },
 
   updateScenarioInputs: function() {
+    const type = document.getElementById('sim-scenario-type')?.value;
+    const catContainer = document.getElementById('sim-cat-select-container');
+    const amtLabel = document.getElementById('sim-amt-label');
+    const sym = this.state.user?.currency || '₹';
+
+    if (type === 'category_reduction') {
+      if (catContainer) catContainer.classList.remove('hidden');
+      if (amtLabel) amtLabel.innerHTML = `Monthly Category Spend Reduction (${sym})`;
+    } else {
+      if (catContainer) catContainer.classList.add('hidden');
+      if (type === 'one_time_purchase') {
+        if (amtLabel) amtLabel.innerHTML = `Purchase Price of Item (${sym})`;
+      } else if (type === 'expense_increase') {
+        if (amtLabel) amtLabel.innerHTML = `Monthly Expense Increase (${sym})`;
+      } else if (type === 'income_decrease') {
+        if (amtLabel) amtLabel.innerHTML = `Monthly Income Reduction (${sym})`;
+      } else if (type === 'salary') {
+        if (amtLabel) amtLabel.innerHTML = `Monthly Income Increase (${sym})`;
+      } else if (type === 'extra_savings') {
+        if (amtLabel) amtLabel.innerHTML = `Extra Monthly Savings Target (${sym})`;
+      } else {
+        if (amtLabel) amtLabel.innerHTML = `Simulated Monthly Change (${sym})`;
+      }
+    }
     this.runSimulation();
   },
 
+  setScenarioChartMode: function(mode) {
+    this.state.scenarioChartMode = mode;
+    const trendBtn = document.getElementById('sim-chart-mode-trend-btn');
+    const cashflowBtn = document.getElementById('sim-chart-mode-cashflow-btn');
+    if (mode === 'trend') {
+      if (trendBtn) trendBtn.className = 'px-2.5 py-1 rounded-lg bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 transition';
+      if (cashflowBtn) cashflowBtn.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition';
+    } else {
+      if (cashflowBtn) cashflowBtn.className = 'px-2.5 py-1 rounded-lg bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 transition';
+      if (trendBtn) trendBtn.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition';
+    }
+    if (this.state.lastScenarioData) {
+      this.renderScenarioChart(this.state.lastScenarioData);
+    }
+  },
+
+  renderScenarioChart: function(res) {
+    const ctx = document.getElementById('sim-scenario-chart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (this.simScenarioChart) {
+      this.simScenarioChart.destroy();
+      this.simScenarioChart = null;
+    }
+
+    const mode = this.state.scenarioChartMode || 'trend';
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.6)';
+
+    if (mode === 'trend') {
+      const lineColor = res.impact === 'negative' ? '#f43f5e' : (res.impact === 'positive' ? '#16a34a' : '#3b82f6');
+      const areaColor = res.impact === 'negative' ? 'rgba(244, 63, 94, 0.08)' : (res.impact === 'positive' ? 'rgba(22, 163, 74, 0.08)' : 'rgba(59, 130, 246, 0.08)');
+
+      this.simScenarioChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: res.months_labels || ['Now', 'Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6', 'Month 7', 'Month 8', 'Month 9', 'Month 10', 'Month 11', 'Month 12'],
+          datasets: [
+            {
+              label: 'Baseline Trajectory',
+              data: res.baseline_trend || [],
+              borderColor: '#94a3b8',
+              backgroundColor: 'transparent',
+              borderDash: [5, 5],
+              borderWidth: 2,
+              tension: 0.25,
+              pointRadius: 2.5
+            },
+            {
+              label: 'Simulated Scenario',
+              data: res.simulated_trend || [],
+              borderColor: lineColor,
+              backgroundColor: areaColor,
+              fill: true,
+              borderWidth: 2.5,
+              tension: 0.25,
+              pointRadius: 3.5,
+              pointHoverRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: { color: textColor, boxWidth: 12, font: { size: 10, weight: 600 } }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ₹${Number(context.raw).toLocaleString()}`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              grid: { color: gridColor },
+              ticks: {
+                color: textColor,
+                font: { size: 10 },
+                callback: function(v) { return '₹' + Number(v).toLocaleString(); }
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: textColor, font: { size: 10 } }
+            }
+          }
+        }
+      });
+    } else {
+      // Cashflow mode
+      this.simScenarioChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Monthly Income', 'Monthly Expenses', 'Monthly Savings'],
+          datasets: [
+            {
+              label: 'Current Baseline',
+              data: [res.base_income || 0, res.base_expenses || 0, res.curr_savings || 0],
+              backgroundColor: '#94a3b8',
+              borderRadius: 6
+            },
+            {
+              label: 'Simulated Scenario',
+              data: [res.sim_income || 0, res.sim_expenses || 0, res.sim_savings || 0],
+              backgroundColor: ['#3b82f6', '#f43f5e', (res.sim_savings >= res.curr_savings ? '#16a34a' : '#f59e0b')],
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: { color: textColor, boxWidth: 12, font: { size: 10, weight: 600 } }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ₹${Number(context.raw).toLocaleString()}`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              grid: { color: gridColor },
+              ticks: {
+                color: textColor,
+                font: { size: 10 },
+                callback: function(v) { return '₹' + Number(v).toLocaleString(); }
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: textColor, font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+  },
+
   runSimulation: function() {
-    const scenarioType = document.getElementById('sim-scenario-type').value;
-    const changeAmount = parseFloat(document.getElementById('sim-change-amt').value) || 0;
+    const scenarioType = document.getElementById('sim-scenario-type')?.value || 'salary';
+    const changeAmount = parseFloat(document.getElementById('sim-change-amt')?.value) || 0;
+    const categoryId = document.getElementById('sim-category-id')?.value || null;
 
     fetch('/api/simulate/what-if', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario_type: scenarioType, change_amount: changeAmount })
+      body: JSON.stringify({ scenario_type: scenarioType, change_amount: changeAmount, category_id: categoryId })
     }).then(r => r.json()).then(res => {
-      document.getElementById('sim-curr-savings').textContent = res.curr_savings.toLocaleString();
-      document.getElementById('sim-simulated-savings').textContent = res.sim_savings.toLocaleString();
-      document.getElementById('sim-curr-annual').textContent = res.curr_annual.toLocaleString();
-      document.getElementById('sim-simulated-annual').textContent = res.sim_annual.toLocaleString();
-      document.getElementById('sim-curr-rate').textContent = res.curr_rate;
-      document.getElementById('sim-simulated-rate').textContent = res.sim_rate;
-      document.getElementById('sim-goal-accel').textContent = res.goal_accel;
+      this.state.lastScenarioData = res;
 
+      const currSavingsEl = document.getElementById('sim-curr-savings');
+      const simSavingsEl = document.getElementById('sim-simulated-savings');
+      const currAnnualEl = document.getElementById('sim-curr-annual');
+      const simAnnualEl = document.getElementById('sim-simulated-annual');
+      const currRateEl = document.getElementById('sim-curr-rate');
+      const simRateEl = document.getElementById('sim-simulated-rate');
+      const diffMonthlyEl = document.getElementById('sim-diff-monthly-lbl');
+      const diffBalanceEl = document.getElementById('sim-diff-balance-lbl');
+      const goalAccelEl = document.getElementById('sim-goal-accel');
+      const goalAccelPill = document.getElementById('sim-goal-accel-pill');
       const card = document.getElementById('sim-simulated-savings-card');
       const label = document.getElementById('sim-simulated-savings-label');
       const num = document.getElementById('sim-simulated-savings-num');
-      const accelPill = document.getElementById('sim-goal-accel-pill');
 
+      const sym = this.state.user?.currency || '₹';
+
+      if (currSavingsEl) currSavingsEl.textContent = Number(res.curr_savings || 0).toLocaleString();
+      if (simSavingsEl) simSavingsEl.textContent = Number(res.sim_savings || 0).toLocaleString();
+      if (currAnnualEl) currAnnualEl.textContent = Number(res.curr_annual || 0).toLocaleString();
+      if (simAnnualEl) simAnnualEl.textContent = Number(res.sim_annual || 0).toLocaleString();
+      if (currRateEl) currRateEl.textContent = res.curr_rate || '0.0%';
+      if (simRateEl) simRateEl.textContent = res.sim_rate || '0.0%';
+
+      if (diffMonthlyEl) {
+        if (res.diff_monthly > 0) {
+          diffMonthlyEl.className = 'font-bold text-emerald-600 dark:text-emerald-400';
+          diffMonthlyEl.innerHTML = `+${sym}${res.diff_monthly.toLocaleString()}/month`;
+        } else if (res.diff_monthly < 0) {
+          diffMonthlyEl.className = 'font-bold text-rose-600 dark:text-rose-400';
+          diffMonthlyEl.innerHTML = `-${sym}${Math.abs(res.diff_monthly).toLocaleString()}/month`;
+        } else {
+          diffMonthlyEl.className = 'font-bold text-slate-900 dark:text-white';
+          diffMonthlyEl.innerHTML = `${sym}0/month`;
+        }
+      }
+
+      if (diffBalanceEl) {
+        if (res.diff_balance_12m > 0) {
+          diffBalanceEl.className = 'font-bold text-emerald-600 dark:text-emerald-400';
+          diffBalanceEl.innerHTML = `+${sym}${res.diff_balance_12m.toLocaleString()}`;
+        } else if (res.diff_balance_12m < 0) {
+          diffBalanceEl.className = 'font-bold text-rose-600 dark:text-rose-400';
+          diffBalanceEl.innerHTML = `-${sym}${Math.abs(res.diff_balance_12m).toLocaleString()}`;
+        } else {
+          diffBalanceEl.className = 'font-bold text-slate-900 dark:text-white';
+          diffBalanceEl.innerHTML = `${sym}0`;
+        }
+      }
+
+      if (goalAccelEl) goalAccelEl.textContent = res.goal_accel;
+
+      // Card styling based on impact
       if (res.impact === 'negative') {
-        if (card) card.className = 'p-5 rounded-2xl bg-accent-rose/10 border border-accent-rose/30 space-y-2';
-        if (label) label.className = 'text-xs font-semibold text-accent-rose';
-        if (num) num.className = 'text-2xl font-bold text-accent-rose';
-        if (accelPill) accelPill.className = 'px-3 py-1 rounded-full text-xs font-bold bg-accent-rose/10 text-accent-rose border border-accent-rose/20 inline-block';
+        if (card) card.className = 'p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 text-center transition-colors';
+        if (label) label.className = 'text-xs text-rose-700 dark:text-rose-300 font-semibold uppercase';
+        if (num) num.className = 'text-xl font-bold text-rose-700 dark:text-rose-300 mt-1';
+        if (goalAccelPill) goalAccelPill.className = 'font-bold text-rose-600 dark:text-rose-400';
       } else if (res.impact === 'neutral') {
-        if (card) card.className = 'p-5 rounded-2xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-2';
-        if (label) label.className = 'text-xs font-semibold text-slate-500';
-        if (num) num.className = 'text-2xl font-bold text-slate-700 dark:text-slate-300';
-        if (accelPill) accelPill.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 inline-block';
+        if (card) card.className = 'p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-center transition-colors';
+        if (label) label.className = 'text-xs text-slate-500 font-semibold uppercase';
+        if (num) num.className = 'text-xl font-bold text-slate-700 dark:text-slate-300 mt-1';
+        if (goalAccelPill) goalAccelPill.className = 'font-bold text-slate-600 dark:text-slate-400';
       } else {
-        if (card) card.className = 'p-5 rounded-2xl bg-brand-50/50 dark:bg-brand-950/20 border border-brand-200 dark:border-brand-900/40 space-y-2';
-        if (label) label.className = 'text-xs font-semibold text-brand-600 dark:text-brand-400';
-        if (num) num.className = 'text-2xl font-bold text-brand-600 dark:text-brand-400';
-        if (accelPill) accelPill.className = 'px-3 py-1 rounded-full text-xs font-bold bg-brand-100 dark:bg-brand-950 text-brand-700 dark:text-brand-400 border border-brand-200 dark:border-brand-800 inline-block';
+        if (card) card.className = 'p-4 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-900/40 text-center transition-colors';
+        if (label) label.className = 'text-xs text-brand-700 dark:text-brand-300 font-semibold uppercase';
+        if (num) num.className = 'text-xl font-bold text-brand-700 dark:text-brand-300 mt-1';
+        if (goalAccelPill) goalAccelPill.className = 'font-bold text-brand-600 dark:text-brand-400';
+      }
+
+      this.renderScenarioChart(res);
+    }).catch(err => console.error("Error running simulation:", err));
+  },
+
+  renderAffordChart: function(res) {
+    const ctx = document.getElementById('sim-afford-chart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (this.simAffordChart) {
+      this.simAffordChart.destroy();
+      this.simAffordChart = null;
+    }
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.6)';
+
+    const postAccColor = (res.status === 'critical') ? '#f43f5e' : ((res.status === 'warning') ? '#f59e0b' : '#16a34a');
+
+    this.simAffordChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Account Before', 'Purchase Price', 'Account After', 'Committed Bills', 'Protected Goals'],
+        datasets: [{
+          label: 'Amount (₹)',
+          data: [
+            Math.max(0, res.account_balance || 0),
+            res.price || 0,
+            Math.max(0, res.account_post_balance || 0),
+            res.committed_expenses || 0,
+            res.savings_wallets_total || 0
+          ],
+          backgroundColor: [
+            '#3b82f6',   // Blue: Account before
+            '#f59e0b',   // Amber: Price
+            postAccColor, // Status color: Account after
+            '#8b5cf6',   // Purple: Committed bills
+            '#10b981'    // Emerald: Protected goal funds
+          ],
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return `Amount: ₹${Number(context.raw).toLocaleString()}`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: gridColor },
+            ticks: {
+              color: textColor,
+              font: { size: 10 },
+              callback: function(v) { return '₹' + Number(v).toLocaleString(); }
+            }
+          },
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: textColor,
+              font: { size: 9 },
+              maxRotation: 0,
+              autoSkip: false
+            }
+          }
+        }
       }
     });
   },
 
   evaluateAffordability: function() {
-    const itemName = document.getElementById('afford-item-name').value;
-    const price = parseFloat(document.getElementById('afford-item-price').value) || 0;
+    const itemName = document.getElementById('afford-item-name')?.value || 'Purchase';
+    const price = parseFloat(document.getElementById('afford-item-price')?.value) || 0;
+    const accountId = document.getElementById('afford-account-id')?.value || null;
+    const categoryId = document.getElementById('afford-category-id')?.value || null;
 
     fetch('/api/simulate/affordability', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item_name: itemName, price: price })
+      body: JSON.stringify({
+        item_name: itemName,
+        price: price,
+        account_id: accountId,
+        category_id: categoryId
+      })
     }).then(r => r.json()).then(res => {
-      document.getElementById('afford-curr-reserve').textContent = res.current_reserve.toLocaleString();
-      document.getElementById('afford-post-reserve').textContent = res.post_reserve.toLocaleString();
-      document.getElementById('afford-months-cov').textContent = `${res.coverage_months} Months`;
-      document.getElementById('afford-summary-text').textContent = res.summary_text;
+      this.state.lastAffordData = res;
 
-      const card = document.getElementById('afford-result-card');
-      const badge = document.getElementById('afford-cov-badge');
-      if (res.status === 'safe') {
-        if (card) card.className = 'p-4 rounded-xl bg-brand-50/50 dark:bg-brand-950/20 border border-brand-200 dark:border-brand-900/40 space-y-3';
-        if (badge) {
-          badge.className = 'text-xs font-semibold text-brand-600 dark:text-brand-400';
-          badge.textContent = '(Healthy Emergency Cushion)';
-        }
-      } else if (res.status === 'warning') {
-        if (card) card.className = 'p-4 rounded-xl bg-accent-amber/10 border border-accent-amber/30 space-y-3';
-        if (badge) {
-          badge.className = 'text-xs font-semibold text-accent-amber';
-          badge.textContent = '(Tight - Under 3 Months)';
-        }
-      } else {
-        if (card) card.className = 'p-4 rounded-xl bg-accent-rose/10 border border-accent-rose/30 space-y-3';
-        if (badge) {
-          badge.className = 'text-xs font-semibold text-accent-rose';
-          badge.textContent = '(Critical - Insufficient Reserves)';
+      // Populate metrics
+      const accBalEl = document.getElementById('afford-acc-balance');
+      const accPostEl = document.getElementById('afford-acc-post-balance');
+      const accPostContainer = document.getElementById('afford-acc-post-container');
+      const totalLiqEl = document.getElementById('afford-total-liquid');
+      const postLiqEl = document.getElementById('afford-total-post-liquid');
+      const postLiqContainer = document.getElementById('afford-post-liquid-container');
+      const committedEl = document.getElementById('afford-committed-expenses');
+      const goalWalletsEl = document.getElementById('afford-goal-wallets-total');
+      const monthsCovEl = document.getElementById('afford-months-cov');
+      const covBadgeEl = document.getElementById('afford-cov-badge');
+      const summaryTextEl = document.getElementById('afford-summary-text');
+      const budgetContainer = document.getElementById('afford-budget-status-container');
+      const budgetStatusText = document.getElementById('afford-budget-status-text');
+
+      if (accBalEl) accBalEl.textContent = Number(res.account_balance || 0).toLocaleString();
+      if (accPostEl) accPostEl.textContent = Number(res.account_post_balance || 0).toLocaleString();
+      if (totalLiqEl) totalLiqEl.textContent = Number(res.total_liquid_available || 0).toLocaleString();
+      if (postLiqEl) postLiqEl.textContent = Number(res.total_post_liquid || 0).toLocaleString();
+      if (committedEl) committedEl.textContent = Number(res.committed_expenses || 0).toLocaleString();
+      if (goalWalletsEl) goalWalletsEl.textContent = Number(res.savings_wallets_total || 0).toLocaleString();
+      if (monthsCovEl) monthsCovEl.textContent = `${res.coverage_months || 0} Months`;
+      if (summaryTextEl) summaryTextEl.textContent = res.summary_text;
+
+      // Color coding for account post-balance
+      if (accPostContainer) {
+        if (!res.is_credit_card && res.account_post_balance < 0) {
+          accPostContainer.className = 'text-sm font-bold text-rose-600 dark:text-rose-400 mt-1';
+        } else {
+          accPostContainer.className = 'text-sm font-bold text-slate-900 dark:text-white mt-1';
         }
       }
-    });
+
+      // Color coding for total post liquid
+      if (postLiqContainer) {
+        if (res.total_post_liquid < 0) {
+          postLiqContainer.className = 'text-sm font-bold text-rose-600 dark:text-rose-400 mt-1';
+        } else {
+          postLiqContainer.className = 'text-sm font-bold text-slate-900 dark:text-white mt-1';
+        }
+      }
+
+      // Emergency buffer badge
+      if (covBadgeEl) {
+        if (res.coverage_months >= 3.0) {
+          covBadgeEl.className = 'text-xs font-semibold text-emerald-600 dark:text-emerald-400';
+          covBadgeEl.textContent = '(Healthy Emergency Cushion)';
+        } else if (res.coverage_months > 0) {
+          covBadgeEl.className = 'text-xs font-semibold text-amber-600 dark:text-amber-400';
+          covBadgeEl.textContent = '(Tight - Under 3 Months)';
+        } else {
+          covBadgeEl.className = 'text-xs font-semibold text-rose-600 dark:text-rose-400';
+          covBadgeEl.textContent = '(Insufficient / Depleted)';
+        }
+      }
+
+      // Category budget check
+      if (budgetContainer && budgetStatusText) {
+        if (res.budget) {
+          budgetContainer.classList.remove('hidden');
+          const sym = this.state.user?.currency || '₹';
+          if (res.budget.exceeded) {
+            budgetStatusText.className = 'font-bold text-rose-600 dark:text-rose-400';
+            budgetStatusText.textContent = `Exceeded by ${sym}${Math.abs(res.budget.post_remaining).toLocaleString()} (Limit: ${sym}${res.budget.limit.toLocaleString()})`;
+          } else {
+            budgetStatusText.className = 'font-bold text-emerald-600 dark:text-emerald-400';
+            budgetStatusText.textContent = `${sym}${res.budget.post_remaining.toLocaleString()} left (Limit: ${sym}${res.budget.limit.toLocaleString()})`;
+          }
+        } else {
+          budgetContainer.classList.add('hidden');
+        }
+      }
+
+      // VERDICT BANNER - Fixed Green Highlight Bug
+      const banner = document.getElementById('afford-verdict-banner');
+      const icon = document.getElementById('afford-verdict-icon');
+      const verdictText = document.getElementById('afford-verdict-text');
+
+      if (res.status === 'safe') {
+        if (banner) banner.className = 'p-4 rounded-xl border transition-all flex items-start space-x-3.5 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300';
+        if (icon) icon.innerHTML = '<svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+        if (verdictText) {
+          verdictText.className = 'text-base font-bold text-emerald-700 dark:text-emerald-300';
+          verdictText.textContent = 'You can afford this.';
+        }
+      } else if (res.status === 'warning') {
+        if (banner) banner.className = 'p-4 rounded-xl border transition-all flex items-start space-x-3.5 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300';
+        if (icon) icon.innerHTML = '<svg class="w-5 h-5 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        if (verdictText) {
+          verdictText.className = 'text-base font-bold text-amber-700 dark:text-amber-300';
+          verdictText.textContent = 'This purchase may affect your savings.';
+        }
+      } else {
+        if (banner) banner.className = 'p-4 rounded-xl border transition-all flex items-start space-x-3.5 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300';
+        if (icon) icon.innerHTML = '<svg class="w-5 h-5 text-rose-600 dark:text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+        if (verdictText) {
+          verdictText.className = 'text-base font-bold text-rose-700 dark:text-rose-300';
+          verdictText.textContent = 'This purchase exceeds your available balance.';
+        }
+      }
+
+      this.renderAffordChart(res);
+    }).catch(err => console.error("Error evaluating affordability:", err));
   },
 
   // Calculators

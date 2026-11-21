@@ -579,15 +579,25 @@ def delete_calendar(event_id):
     fin_service.delete_calendar_event(profile_id, event_id)
     return jsonify({'success': True})
 
-# --- Simulations ---
+# --- Financial Planner (Simulations & Affordability) ---
+@api_bp.route('/simulate/baseline', methods=['GET'])
+def simulate_baseline():
+    profile_id = get_current_profile_id()
+    try:
+        res = fin_service.get_simulator_baseline(profile_id)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
 @api_bp.route('/simulate/what-if', methods=['POST'])
 def simulate_what_if():
     profile_id = get_current_profile_id()
     data = request.get_json() or {}
     scenario_type = data.get('scenario_type', 'salary')
     change_amount = data.get('change_amount', 5000)
+    category_id = data.get('category_id')
     try:
-        res = fin_service.run_what_if_simulation(profile_id, scenario_type, change_amount)
+        res = fin_service.run_what_if_simulation(profile_id, scenario_type, change_amount, category_id)
         return jsonify(res)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -598,8 +608,10 @@ def simulate_affordability():
     data = request.get_json() or {}
     item_name = data.get('item_name', 'High Performance Laptop')
     price = data.get('price', 45000)
+    account_id = data.get('account_id')
+    category_id = data.get('category_id')
     try:
-        res = fin_service.evaluate_affordability(profile_id, item_name, price)
+        res = fin_service.evaluate_affordability(profile_id, item_name, price, account_id, category_id)
         return jsonify(res)
     except Exception as e:
         return jsonify({'error': str(e)}), 400

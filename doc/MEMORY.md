@@ -1,12 +1,12 @@
 # MoneyTrack — Persistent AI Project Context & Memory
 
-**Document Version:** 1.1.0  
+**Document Version:** 1.2.0  
 **Status:** Living Engineering Memory & AI Context Anchor  
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Constraint:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/MEMORY.md`  
-**Current Release Version:** `v0.8.3-beta` (Stable Target: `v1.0.0`)  
-**Test Suite Status:** 73/73 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.4-beta` (Stable Target: `v1.0.0`)  
+**Test Suite Status:** 86/86 Tests Passing (100% Pass Rate via `python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -177,10 +177,11 @@ flowchart LR
 ---
 
 ## 11. Current Development Stage & Milestones
-- **Current Version:** `v0.8.3-beta`
+- **Current Version:** `v0.8.4-beta`
 - **Core Architecture:** 100% Implemented (Flask backend, SQLite schema, Jinja2 views, REST APIs).
-- **Test Matrix:** 73/73 automated tests passing across 10 test suites.
+- **Test Matrix:** 86/86 automated tests passing across 11 test suites.
 - **Phase 8 Milestone Completed:** Savings Goals Dedicated Wallets, user-controlled Add/Withdraw money, non-destructive fund return on goal deletion, full ledger transfer integration, custom GUI modals without native popups, and real-time wallet tracking in Accounts & Wallets.
+- **Phase 9 Milestone Completed:** Financial Planner (Try a Financial Scenario & Check Before You Buy) overhaul — verified real financial data integration, account-specific payment selection, dedicated savings goal protection, recurring commitments & category budget boundaries, green highlight fix, dynamic local Chart.js analytics, and complete test suite (86/86 passing).
 - **Offline Packaging:** Vendored offline dependencies verified.
 
 ---

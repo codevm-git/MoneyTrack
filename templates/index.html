@@ -225,7 +225,7 @@
 
       <button onclick="MoneyTrackApp.navigateTo('simulator')" data-nav="simulator" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
         <svg class="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        <span>Simulator & Affordability</span>
+        <span>Financial Planner</span>
       </button>
 
       <button onclick="MoneyTrackApp.navigateTo('calendar')" data-nav="calendar" class="nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60">
@@ -738,19 +738,21 @@
       <!-- ========================================== -->
       <!-- VIEW 4: SIMULATOR & "CAN I AFFORD THIS?" -->
       <!-- ========================================== -->
+      <!-- VIEW 4: FINANCIAL PLANNER (SCENARIOS & AFFORDABILITY) -->
+      <!-- ========================================== -->
       <section id="view-simulator" class="view-panel space-y-8 hidden">
         <div>
-          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Financial Simulator</h2>
-          <p class="text-xs text-slate-500 dark:text-slate-400">Test hypothetical scenarios and evaluate major financial decisions before spending.</p>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Financial Planner</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Test hypothetical financial scenarios and evaluate real purchase affordability before spending.</p>
         </div>
 
-        <!-- Navigation Tabs for Simulator -->
+        <!-- Navigation Tabs for Financial Planner -->
         <div class="flex border-b border-gray-200 dark:border-slate-800 space-x-6 text-sm font-semibold">
-          <button onclick="MoneyTrackApp.switchSimulatorTab('scenario')" id="sim-tab-btn-scenario" class="pb-3 text-brand-600 dark:text-brand-400 border-b-2 border-brand-600">What-If Scenarios</button>
-          <button onclick="MoneyTrackApp.switchSimulatorTab('afford')" id="sim-tab-btn-afford" class="pb-3 text-slate-400 border-b-2 border-transparent hover:text-slate-600">"Can I Afford This?" Tool</button>
+          <button onclick="MoneyTrackApp.switchSimulatorTab('scenario')" id="sim-tab-btn-scenario" class="pb-3 text-brand-600 dark:text-brand-400 border-b-2 border-brand-600">Try a Financial Scenario</button>
+          <button onclick="MoneyTrackApp.switchSimulatorTab('afford')" id="sim-tab-btn-afford" class="pb-3 text-slate-400 border-b-2 border-transparent hover:text-slate-600 dark:hover:text-slate-300">Check Before You Buy</button>
         </div>
 
-        <!-- TAB A: WHAT-IF SCENARIOS -->
+        <!-- TAB A: TRY A FINANCIAL SCENARIO -->
         <div id="sim-panel-scenario" class="space-y-6">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Controls Form -->
@@ -760,104 +762,221 @@
               <div>
                 <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Scenario Type</label>
                 <select id="sim-scenario-type" onchange="MoneyTrackApp.updateScenarioInputs()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
-                  <option value="salary">Salary Change (+ / -)</option>
-                  <option value="rent">Rent / Housing Cost Change</option>
-                  <option value="purchase">New Major Recurring Cost</option>
-                  <option value="extra_savings">Extra Monthly Savings Boost</option>
+                  <option value="expense_increase">Increase Monthly Expenses</option>
+                  <option value="income_decrease">Income Decreases</option>
+                  <option value="salary">Income Increases (Raise / Extra Income)</option>
+                  <option value="extra_savings">Save a Fixed Extra Amount Every Month</option>
+                  <option value="one_time_purchase">Purchase an Expensive Item (One-Time)</option>
+                  <option value="category_reduction">Reduce Spending in a Category</option>
                 </select>
               </div>
 
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Current Base Income: <span class="currency-symbol">₹</span><span id="sim-curr-inc-lbl">25,000</span></label>
-                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Simulated Monthly Change (<span class="currency-symbol">₹</span>)</label>
-                <input type="number" id="sim-change-amt" value="5000" oninput="MoneyTrackApp.runSimulation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
+              <!-- Dynamic Category Selector (Visible for category reduction) -->
+              <div id="sim-cat-select-container" class="hidden">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Target Expense Category</label>
+                <select id="sim-category-id" onchange="MoneyTrackApp.runSimulation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
+                  <!-- Populated by JS -->
+                </select>
               </div>
 
-              <button onclick="MoneyTrackApp.runSimulation()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Run Simulation</button>
+              <!-- Real-time Baseline Financial Info -->
+              <div class="p-3.5 rounded-xl bg-gray-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 space-y-2 text-xs">
+                <div class="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wide">Actual Financial Baseline</div>
+                <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                  <span>Current Monthly Income:</span>
+                  <span class="font-bold text-slate-800 dark:text-slate-200"><span class="currency-symbol">₹</span><span id="sim-curr-inc-lbl">0</span></span>
+                </div>
+                <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                  <span>Current Monthly Expenses:</span>
+                  <span class="font-bold text-slate-800 dark:text-slate-200"><span class="currency-symbol">₹</span><span id="sim-curr-exp-lbl">0</span></span>
+                </div>
+                <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                  <span>Liquid Spending Balance:</span>
+                  <span class="font-bold text-slate-800 dark:text-slate-200"><span class="currency-symbol">₹</span><span id="sim-curr-liquid-lbl">0</span></span>
+                </div>
+              </div>
+
+              <div>
+                <label id="sim-amt-label" class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Simulated Monthly Change (<span class="currency-symbol">₹</span>)</label>
+                <input type="number" id="sim-change-amt" value="5000" min="0" oninput="MoneyTrackApp.runSimulation()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
+              </div>
+
+              <button onclick="MoneyTrackApp.runSimulation()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm transition">Run Simulation</button>
             </div>
 
             <!-- Side by Side Metrics Result -->
             <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 lg:col-span-2 space-y-6">
-              <h3 class="text-base font-bold text-slate-900 dark:text-white">Before vs After Comparison</h3>
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Financial Position & Comparison</h3>
 
               <div class="grid grid-cols-2 gap-4">
                 <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-center">
                   <span class="text-xs text-slate-400 font-semibold uppercase">Current Monthly Savings</span>
-                  <div class="text-xl font-bold text-slate-900 dark:text-white mt-1"><span class="currency-symbol">₹</span><span id="sim-curr-savings">6,600</span></div>
+                  <div class="text-xl font-bold text-slate-900 dark:text-white mt-1"><span class="currency-symbol">₹</span><span id="sim-curr-savings">0</span></div>
                 </div>
 
-                <div id="sim-simulated-savings-card" class="p-4 rounded-xl bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900/50 text-center transition-colors">
-                  <span id="sim-simulated-savings-label" class="text-xs text-brand-600 dark:text-brand-400 font-semibold uppercase">Simulated Monthly Savings</span>
-                  <div id="sim-simulated-savings-num" class="text-xl font-bold text-brand-700 dark:text-brand-300 mt-1"><span class="currency-symbol">₹</span><span id="sim-simulated-savings">11,600</span></div>
+                <div id="sim-simulated-savings-card" class="p-4 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-900/40 text-center transition-colors">
+                  <span id="sim-simulated-savings-label" class="text-xs text-brand-700 dark:text-brand-300 font-semibold uppercase">Simulated Monthly Savings</span>
+                  <div id="sim-simulated-savings-num" class="text-xl font-bold text-brand-700 dark:text-brand-300 mt-1"><span class="currency-symbol">₹</span><span id="sim-simulated-savings">0</span></div>
                 </div>
               </div>
 
               <!-- Comparison Table -->
               <div class="space-y-3 text-xs">
                 <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
+                  <span class="text-slate-500">Monthly Net Cashflow Impact</span>
+                  <span class="font-bold text-slate-900 dark:text-white" id="sim-diff-monthly-lbl">+<span class="currency-symbol">₹</span>0/month</span>
+                </div>
+
+                <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
                   <span class="text-slate-500">Annual Net Cash Accumulation</span>
-                  <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="sim-curr-annual">79,200</span> &rarr; <span class="currency-symbol">₹</span><span id="sim-simulated-annual">139,200</span></span>
+                  <span class="font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="sim-curr-annual">0</span> &rarr; <span class="currency-symbol">₹</span><span id="sim-simulated-annual">0</span></span>
                 </div>
 
                 <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
                   <span class="text-slate-500">Savings Rate Impact</span>
-                  <span class="font-bold text-slate-900 dark:text-white"><span id="sim-curr-rate">26.4%</span> &rarr; <span id="sim-simulated-rate">38.6%</span></span>
+                  <span class="font-bold text-slate-900 dark:text-white"><span id="sim-curr-rate">0.0%</span> &rarr; <span id="sim-simulated-rate">0.0%</span></span>
                 </div>
 
                 <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
-                  <span class="text-slate-500">Goal Completion Timeline</span>
-                  <span id="sim-goal-accel-pill" class="font-bold text-brand-600 dark:text-brand-400"><span id="sim-goal-accel">Accelerated by 4.2 Months</span></span>
+                  <span class="text-slate-500">12-Month Projected Net Worth Delta</span>
+                  <span class="font-bold text-slate-900 dark:text-white" id="sim-diff-balance-lbl"><span class="currency-symbol">₹</span>0</span>
+                </div>
+
+                <div class="flex justify-between py-2 border-b border-gray-100 dark:border-slate-800">
+                  <span class="text-slate-500">Future Financial Impact / Timeline</span>
+                  <span id="sim-goal-accel-pill" class="font-bold text-brand-600 dark:text-brand-400"><span id="sim-goal-accel">No change</span></span>
+                </div>
+              </div>
+
+              <!-- Interactive Chart for Scenarios -->
+              <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-3">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <h4 class="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                    <svg class="w-4 h-4 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <span>Financial Trajectory Analytics</span>
+                  </h4>
+                  <div class="flex items-center space-x-1.5 text-[11px] font-semibold">
+                    <button type="button" id="sim-chart-mode-trend-btn" onclick="MoneyTrackApp.setScenarioChartMode('trend')" class="px-2.5 py-1 rounded-lg bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 transition">12-Month Trend</button>
+                    <button type="button" id="sim-chart-mode-cashflow-btn" onclick="MoneyTrackApp.setScenarioChartMode('cashflow')" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">Monthly Cashflow</button>
+                  </div>
+                </div>
+                <div class="relative h-56 w-full">
+                  <canvas id="sim-scenario-chart"></canvas>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- TAB B: CAN I AFFORD THIS? TOOL -->
+        <!-- TAB B: CHECK BEFORE YOU BUY -->
         <div id="sim-panel-afford" class="space-y-6 hidden">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Purchase Form -->
             <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 space-y-4">
               <h3 class="text-base font-bold text-slate-900 dark:text-white">Purchase Evaluator</h3>
 
               <div>
-                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Item / Purchase Name</label>
-                <input type="text" id="afford-item-name" value="High Performance Laptop" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Item / Purchase Description</label>
+                <input type="text" id="afford-item-name" value="High Performance Laptop" placeholder="e.g. Work Laptop, Flight Tickets, Electronics" oninput="MoneyTrackApp.evaluateAffordability()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
               </div>
 
               <div>
-                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Purchase Price (<span class="currency-symbol">₹</span>)</label>
-                <input type="number" id="afford-item-price" value="45000" oninput="MoneyTrackApp.evaluateAffordability()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Purchase Amount (<span class="currency-symbol">₹</span>)</label>
+                <input type="number" id="afford-item-price" value="45000" min="0" oninput="MoneyTrackApp.evaluateAffordability()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none">
               </div>
 
-              <button onclick="MoneyTrackApp.evaluateAffordability()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold">Evaluate Numerical Impact</button>
+              <!-- Payment Account / Wallet Selector -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Payment Account or Wallet</label>
+                <select id="afford-account-id" onchange="MoneyTrackApp.evaluateAffordability()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
+                  <!-- Dynamically populated with real accounts & balances -->
+                </select>
+              </div>
+
+              <!-- Optional Category Budget Selection -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Category Budget Limit (Optional)</label>
+                <select id="afford-category-id" onchange="MoneyTrackApp.evaluateAffordability()" class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none">
+                  <option value="">No Category Budget Constraint</option>
+                  <!-- Dynamically populated with user's categories/budgets -->
+                </select>
+              </div>
+
+              <button onclick="MoneyTrackApp.evaluateAffordability()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm transition">Evaluate Numerical Impact</button>
             </div>
 
             <!-- Output Box -->
-            <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 lg:col-span-2 space-y-6">
-              <h3 class="text-base font-bold text-slate-900 dark:text-white">Consequence & Impact Statement</h3>
+            <div class="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 lg:col-span-2 space-y-5">
+              <h3 class="text-base font-bold text-slate-900 dark:text-white">Affordability Analysis & Impact</h3>
 
-              <div id="afford-result-card" class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-500 uppercase">Current Emergency Reserve</span>
-                  <span class="text-sm font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="afford-curr-reserve">65,000</span></span>
+              <!-- Prominent Verdict Banner (Fixed Green Highlight Bug) -->
+              <div id="afford-verdict-banner" class="p-4 rounded-xl border transition-all flex items-start space-x-3.5 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300">
+                <div id="afford-verdict-icon" class="p-2 rounded-lg bg-white/80 dark:bg-slate-900/80 shrink-0">
+                  <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 </div>
-
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-500 uppercase">Reserve After Purchase</span>
-                  <span class="text-sm font-bold text-slate-900 dark:text-white"><span class="currency-symbol">₹</span><span id="afford-post-reserve">20,000</span></span>
-                </div>
-
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-500 uppercase">Emergency Coverage</span>
-                  <span id="afford-coverage-container" class="text-sm font-bold text-slate-900 dark:text-white"><span id="afford-months-cov">1.1 Months</span> <span id="afford-cov-badge" class="text-xs font-normal text-slate-400">(Recommended: 3+ Months)</span></span>
+                <div class="space-y-0.5">
+                  <span class="text-[10px] uppercase font-bold tracking-wider opacity-75">Affordability Result</span>
+                  <div id="afford-verdict-text" class="text-base font-bold text-slate-900 dark:text-white">You can afford this.</div>
+                  <p id="afford-summary-text" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pt-0.5">
+                    Analyzing real-time financial balances...
+                  </p>
                 </div>
               </div>
 
-              <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 text-xs space-y-2">
-                <div class="font-bold text-slate-800 dark:text-slate-200">Financial Impact Summary</div>
-                <p id="afford-summary-text" class="text-slate-500 dark:text-slate-400">
-                  Making this purchase immediately reduces your total liquid cash reserves by 69.2%. It will take approximately 6.8 months of average savings to replenish this amount.
-                </p>
+              <!-- Financial Impact Breakdown Grid -->
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800">
+                  <span class="text-slate-400 block font-semibold uppercase text-[10px]">Selected Account Balance</span>
+                  <div class="text-sm font-bold text-slate-900 dark:text-white mt-1"><span class="currency-symbol">₹</span><span id="afford-acc-balance">0</span></div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800">
+                  <span class="text-slate-400 block font-semibold uppercase text-[10px]">Remaining in Account</span>
+                  <div class="text-sm font-bold text-slate-900 dark:text-white mt-1" id="afford-acc-post-container"><span class="currency-symbol">₹</span><span id="afford-acc-post-balance">0</span></div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800">
+                  <span class="text-slate-400 block font-semibold uppercase text-[10px]">Total Liquid Spending Cash</span>
+                  <div class="text-sm font-bold text-slate-900 dark:text-white mt-1"><span class="currency-symbol">₹</span><span id="afford-total-liquid">0</span></div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800">
+                  <span class="text-slate-400 block font-semibold uppercase text-[10px]">Remaining Spending Cash</span>
+                  <div class="text-sm font-bold text-slate-900 dark:text-white mt-1" id="afford-post-liquid-container"><span class="currency-symbol">₹</span><span id="afford-total-post-liquid">0</span></div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800">
+                  <span class="text-slate-400 block font-semibold uppercase text-[10px]">Committed Bills / Calendar</span>
+                  <div class="text-sm font-bold text-amber-600 dark:text-amber-400 mt-1"><span class="currency-symbol">₹</span><span id="afford-committed-expenses">0</span></div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800">
+                  <span class="text-slate-400 block font-semibold uppercase text-[10px]">Protected in Goal Wallets</span>
+                  <div class="text-sm font-bold text-brand-600 dark:text-brand-400 mt-1"><span class="currency-symbol">₹</span><span id="afford-goal-wallets-total">0</span></div>
+                </div>
+              </div>
+
+              <!-- Emergency Cushion & Budget Bounds -->
+              <div class="flex flex-wrap items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 text-xs gap-2">
+                <div>
+                  <span class="text-slate-400 font-semibold uppercase text-[10px] block">Emergency Expense Cushion:</span>
+                  <span id="afford-coverage-container" class="font-bold text-slate-800 dark:text-slate-200"><span id="afford-months-cov">0 Months</span> <span id="afford-cov-badge" class="text-xs font-medium text-slate-400"></span></span>
+                </div>
+                <div id="afford-budget-status-container" class="text-right hidden">
+                  <span class="text-slate-400 font-semibold uppercase text-[10px] block">Category Budget Limit:</span>
+                  <span id="afford-budget-status-text" class="font-bold text-slate-800 dark:text-slate-200"></span>
+                </div>
+              </div>
+
+              <!-- Interactive Chart for Affordability -->
+              <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 space-y-3">
+                <h4 class="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                  <svg class="w-4 h-4 text-brand-600 stroke-current fill-none stroke-2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                  <span>Purchase & Reserve Impact Analytics</span>
+                </h4>
+                <div class="relative h-56 w-full">
+                  <canvas id="sim-afford-chart"></canvas>
+                </div>
               </div>
             </div>
           </div>

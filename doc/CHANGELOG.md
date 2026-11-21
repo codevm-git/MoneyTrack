@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.4-beta] - 2026-11-21
+
+### Added
+- **Financial Planner (Try a Financial Scenario & Check Before You Buy) Overhaul:**
+  - **Financial Logic Review & Accuracy:**
+    - Connected both simulation features directly to live, actual financial records (Accounts, Wallets, Transactions, Budgets, Savings Goals, and Scheduled Calendar Events).
+    - Multi-account balance isolation: Differentiates asset accounts from credit cards (liabilities) and strictly prevents treating transfers or opening deposits as income/expense.
+    - Dedicated Savings Goal Protection: Goal wallet funds are strictly isolated from freely available spending cash.
+    - Scheduled Obligations Consideration: Integrates upcoming recurring expenses from `calendar_events` into liquid buffer calculations.
+    - Dynamic Category Budget Enforcement: Checks purchases against current category spending ceilings.
+  - **Try a Financial Scenario (What-If Scenarios):**
+    - Implemented comprehensive scenario engines: Increase Monthly Expenses, Income Decreases, Income Increases (Raise), Save a Fixed Extra Amount Every Month, Purchase an Expensive Item (One-Time Lump Sum), and Reduce Spending in a Category.
+    - Real-time calculations: Current vs Expected Position, Monthly Net Cashflow Delta, Annual Cash Accumulation, Savings Rate Impact, and Goal Completion Timeline impact.
+    - Data Immutability: Pure mathematical projections guaranteed to never alter underlying database records or balances.
+  - **Check Before You Buy (Can I Afford This?):**
+    - Account & Wallet Selector: Allows users to select the specific payment account or wallet, checking account-specific balances and preventing misleading overall-balance approvals.
+    - Prominent Affordability Verdict Banner: Clear plain-English verdicts:
+      - "You can afford this." (Positive / Green)
+      - "This purchase may affect your savings." (Warning / Amber)
+      - "This purchase exceeds your available balance." (Critical / Rose)
+    - Financial Impact Breakdown Grid: Displays Selected Account Balance, Remaining Account Balance, Total Liquid Spending Cash, Remaining Spending Cash, Committed Bills, Protected in Goal Wallets, and Emergency Cushion.
+  - **Live Analytics & Interactive Graphs:**
+    - Integrated local Chart.js visualizations for both features without external CDN dependencies.
+    - Try a Financial Scenario: Toggleable 12-Month Projected Balance Trajectory (Line) and Monthly Cashflow Comparison (Bar).
+    - Check Before You Buy: Purchase & Reserve Impact breakdown chart displaying Account Before, Price, Account After, Committed Bills, and Protected Goals.
+    - Dynamic chart updates on input changes with automatic dark/light theme styling.
+  - **UI/UX & Naming Improvements:**
+    - Standardized naming across the application: Financial Planner, Try a Financial Scenario, and Check Before You Buy.
+    - Fixed UI green highlight error: Green highlight strictly reserved for safe purchases; never displayed when a purchase exceeds available funds, cuts into commitments, or overdraws an account.
+    - Improved responsive layout, spacing, alignment, and accessible color tokens.
+  - **Automated Verification:**
+    - Created `tests/test_simulator_and_affordability.py` with 12 comprehensive unit tests covering all 10 financial situations and edge cases.
+    - Added REST API tests in `tests/test_api.py` covering `/api/simulate/baseline`, `/api/simulate/what-if`, and `/api/simulate/affordability`.
+    - Total test suite now at 86/86 automated tests passing with 100% pass rate.
+
+---
+
 ## [0.8.3-beta] - 2026-11-08
 
 ### Added

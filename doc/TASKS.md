@@ -5,8 +5,8 @@
 **Project:** MoneyTrack — Smart Financial Literacy and Budget Planner for Public  
 **Core Requirement:** 100% Offline and Privacy-First  
 **Target Repository Path:** `doc/TASKS.md`  
-**Current Release Version:** `v0.8.1-beta` 
-**Test Suite Status:** 73/73 Tests Passing (`python3 -m unittest discover -s tests`)  
+**Current Release Version:** `v0.8.4-beta` 
+**Test Suite Status:** 86/86 Tests Passing (`python3 -m unittest discover -s tests`)  
 
 ---
 
@@ -41,8 +41,10 @@ gantt
     Transfers, Balances & Edit GUI      :done, p7_1, 2026-11-08, 2026-11-08
     section Phase 8: Savings Goals
     Wallets, Deposits, Withdrawals & GUI:done, p8_1, 2026-11-08, 2026-11-08
+    section Phase 9: Financial Planner & Analytics
+    Logic Fix, UI/UX & Live Analytics   :done, p9_1, 2026-11-21, 2026-11-21
     section Future Roadmap
-    Standalone OS Binaries (PyInstaller):p9_1, 2026-11-15, 14d
+    Standalone OS Binaries (PyInstaller):p10_1, 2026-11-28, 14d
 ```
 
 ### Milestone Progress Summary
@@ -58,6 +60,7 @@ gantt
 | **Phase 6** | Dashboard Analytics, Budget Limits, Alerts & Diagnostics | **Completed (100%)** | Account-wise filtering, Budget Manager Modal, Dynamic Insights, 5-point Diagnostics, Toast Stack. |
 | **Phase 7** | Money & Transactions Management | **Completed (100%)** | Account creation guard, wallet-to-wallet transfers, opening balance accuracy, custom transaction edit GUI, 65/65 tests passing. |
 | **Phase 8** | Savings Goals & Dedicated Wallets | **Completed (100%)** | Dedicated savings wallets, flexible Add/Withdraw money, non-destructive fund return on deletion, transfer integration, custom modals, 73/73 tests passing. |
+| **Phase 9** | Financial Planner (Scenarios & Affordability) | **Completed (100%)** | Real financial data integration, account-specific checking, goal wallet protection, commitments & budget bounds, green highlight fix, local Chart.js analytics, 86/86 tests passing. |
 | **Backlog** | Standalone Desktop Packaging | **Planned** | Standalone PyInstaller / AppImage distribution. |
 
 ---

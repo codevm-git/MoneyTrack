@@ -1966,91 +1966,370 @@ class FinancialService:
         finally:
             conn.close()
 
-    # --- Simulations ---
-    def evaluate_affordability(self, profile_id=1, item_name="Purchase", price_rupees=45000):
-        item_name = sanitize_text(item_name, "Item Name", 1, 100)
-        price_rupees = validate_amount(price_rupees, "Purchase Price", min_val=1.0)
-        
-        totals = self.get_ledger_totals(profile_id)
+    # --- Financial Planner (Simulations & Affordability) ---
+    def get_simulator_baseline(self, profile_id=1):
+        """
+        Retrieves real-time baseline financial information for the active profile:
+        - Current spending accounts & balances
+        - Dedicated savings goal wallets (protected)
+        - Monthly income, expenses, and savings
+        - Upcoming scheduled commitments
+        - Active category budgets
+        """
         accounts = self.get_accounts(profile_id)
-        liquid_reserve = sum(a['current_balance'] for a in accounts if a['account_type'] != 'credit_card')
-        current_reserve = max(0.0, liquid_reserve) if liquid_reserve > 0 else max(0.0, totals['balance'])
-        monthly_expense = totals['expenses']
-        
-        post_reserve = current_reserve - price_rupees
+        regular_asset_accounts = [a for a in accounts if a['account_type'] != 'credit_card' and not a.get('is_savings_wallet')]
+        goal_wallets = [a for a in accounts if a.get('is_savings_wallet')]
+        credit_accounts = [a for a in accounts if a['account_type'] == 'credit_card']
+
+        total_liquid_available = max(0.0, sum(a['current_balance'] for a in regular_asset_accounts))
+        savings_wallets_total = sum(a['current_balance'] for a in goal_wallets)
+
+        curr_m = datetime.date.today().strftime('%Y-%m')
+        curr_totals = self.get_ledger_totals(profile_id, month_year=curr_m)
+        all_totals = self.get_ledger_totals(profile_id)
+
+        cal_events = self.get_calendar_events(profile_id)
+        cal_inc = sum(e['amount'] for e in cal_events if e.get('type') == 'income')
+        cal_exp = sum(e['amount'] for e in cal_events if e.get('type') == 'expense' and e.get('status') == 'scheduled')
+
+        base_income = curr_totals['income'] if curr_totals['income'] > 0 else (cal_inc if cal_inc > 0 else all_totals['income'])
+        base_expenses = curr_totals['expenses'] if curr_totals['expenses'] > 0 else (cal_exp if cal_exp > 0 else all_totals['expenses'])
+
+        monthly_savings = max(0.0, base_income - base_expenses)
+        savings_rate = round((monthly_savings / base_income) * 100, 1) if base_income > 0 else 0.0
+
+        budgets = self.get_budget_overview(profile_id, month_year=curr_m)
+        if not budgets:
+            budgets = self.get_budget_overview(profile_id)
+
+        return {
+            'accounts': accounts,
+            'regular_asset_accounts': regular_asset_accounts,
+            'goal_wallets': goal_wallets,
+            'credit_accounts': credit_accounts,
+            'total_liquid_available': total_liquid_available,
+            'savings_wallets_total': savings_wallets_total,
+            'base_income': base_income,
+            'base_expenses': base_expenses,
+            'monthly_savings': monthly_savings,
+            'savings_rate': savings_rate,
+            'committed_expenses': cal_exp,
+            'budgets': budgets
+        }
+
+    def evaluate_affordability(self, profile_id=1, item_name="Purchase", price_rupees=45000, account_id=None, category_id=None):
+        """
+        Evaluates pre-purchase affordability against real user balances and commitments.
+        - Checks specific selected account/wallet balance.
+        - Distinguishes dedicated savings goal wallets (not freely available cash).
+        - Accounts for upcoming scheduled commitments (bills from calendar).
+        - Evaluates category budget bounds if category is selected.
+        - Provides simple, non-misleading verdicts:
+          * 'You can afford this.' (safe)
+          * 'This purchase may affect your savings.' (warning)
+          * 'This purchase exceeds your available balance.' (critical)
+        - Never mutates actual records.
+        """
+        item_name = sanitize_text(item_name or "Purchase", "Item Name", 1, 100)
+        price_rupees = validate_amount(price_rupees, "Purchase Price", min_val=0.0)
+
+        accounts = self.get_accounts(profile_id)
+        regular_asset_accounts = [a for a in accounts if a['account_type'] != 'credit_card' and not a.get('is_savings_wallet')]
+        goal_wallets = [a for a in accounts if a.get('is_savings_wallet')]
+        credit_accounts = [a for a in accounts if a['account_type'] == 'credit_card']
+
+        total_liquid_available = max(0.0, sum(a['current_balance'] for a in regular_asset_accounts))
+        savings_wallets_total = sum(a['current_balance'] for a in goal_wallets)
+
+        # Identify selected account
+        selected_acc = None
+        if account_id and str(account_id) != 'ALL' and str(account_id).strip() != '':
+            selected_acc = next((a for a in accounts if str(a['id']) == str(account_id)), None)
+
+        if not selected_acc:
+            # Default to default account or first regular asset account or first account
+            selected_acc = next((a for a in accounts if a.get('is_default')), None) or (regular_asset_accounts[0] if regular_asset_accounts else (accounts[0] if accounts else None))
+
+        if selected_acc:
+            acc_id_str = str(selected_acc['id'])
+            account_name = selected_acc['name']
+            acc_type = selected_acc['account_type']
+            is_credit_card = (acc_type == 'credit_card')
+            is_savings_wallet = bool(selected_acc.get('is_savings_wallet'))
+            savings_goal_name = selected_acc.get('savings_goal_name')
+            acc_balance = selected_acc['current_balance']
+        else:
+            acc_id_str = None
+            account_name = 'No Account'
+            acc_type = 'savings'
+            is_credit_card = False
+            is_savings_wallet = False
+            savings_goal_name = None
+            acc_balance = 0.0
+
+        # Post-purchase balance for selected account
+        if is_credit_card:
+            acc_post_balance = acc_balance + price_rupees # debt increases
+        else:
+            acc_post_balance = acc_balance - price_rupees
+
+        # Post-purchase total liquid reserve
+        total_post_liquid = total_liquid_available - price_rupees
+
+        # Financial commitments from calendar
+        cal_events = self.get_calendar_events(profile_id)
+        scheduled_expenses = [e for e in cal_events if e.get('type') == 'expense' and e.get('status') == 'scheduled']
+        committed_expenses = sum(e.get('amount', 0) for e in scheduled_expenses)
+
+        # Monthly expense for emergency runway
+        curr_m = datetime.date.today().strftime('%Y-%m')
+        curr_totals = self.get_ledger_totals(profile_id, month_year=curr_m)
+        all_totals = self.get_ledger_totals(profile_id)
+        monthly_expense = curr_totals['expenses'] if curr_totals['expenses'] > 0 else all_totals['expenses']
+        if monthly_expense == 0:
+            monthly_expense = committed_expenses
+
         if monthly_expense > 0:
-            coverage_months = round(max(0.0, post_reserve) / monthly_expense, 1)
+            coverage_months = round(max(0.0, total_post_liquid) / monthly_expense, 1)
         else:
-            coverage_months = round(max(0.0, post_reserve) / max(1.0, current_reserve / 6.0), 1)
+            coverage_months = round(max(0.0, total_post_liquid) / max(1.0, total_liquid_available / 6.0), 1) if total_liquid_available > 0 else 0.0
 
-        pct_reduction = round((price_rupees / current_reserve) * 100, 1) if current_reserve > 0 else 100.0
-        avg_monthly_savings = max(1000.0, totals['savings'])
-        recovery_months = round(price_rupees / avg_monthly_savings, 1)
+        # Category budget check
+        budget_info = None
+        budget_exceeded = False
+        if category_id and str(category_id).strip() != '' and str(category_id) != 'ALL':
+            budgets = self.get_budget_overview(profile_id, month_year=curr_m)
+            if not budgets:
+                budgets = self.get_budget_overview(profile_id)
+            matching_b = next((b for b in budgets if str(b['category_id']) == str(category_id)), None)
+            if matching_b:
+                remaining_b = matching_b['remaining']
+                post_remaining = remaining_b - price_rupees
+                budget_exceeded = (post_remaining < 0)
+                budget_info = {
+                    'category_id': matching_b['category_id'],
+                    'category_name': matching_b['name'],
+                    'limit': matching_b['limit'],
+                    'spent': matching_b['spent'],
+                    'remaining': remaining_b,
+                    'post_remaining': post_remaining,
+                    'exceeded': budget_exceeded
+                }
 
-        if post_reserve < 0:
-            deficit = abs(post_reserve)
-            summary_text = (
-                f"Warning: This purchase exceeds your total liquid cash reserves by {deficit:,.0f} and would leave your accounts in deficit. "
-                f"It will take approximately {recovery_months} months of disciplined savings to safely accumulate this amount."
-            )
+        # Status and verdict determination
+        pct_of_reserve = round((price_rupees / total_liquid_available) * 100, 1) if total_liquid_available > 0 else 100.0
+
+        if not selected_acc or (not is_credit_card and acc_post_balance < 0) or total_post_liquid < 0 or (price_rupees > 0 and total_liquid_available <= 0 and acc_balance <= 0):
             status = 'critical'
-        elif coverage_months < 3.0:
-            summary_text = (
-                f"Making this purchase reduces your liquid cash reserves by {pct_reduction}%, leaving {coverage_months} months of emergency expense coverage (below the recommended 3 months buffer). "
-                f"It will take approximately {recovery_months} months of average savings to replenish."
-            )
+            verdict = 'This purchase exceeds your available balance.'
+            if not is_credit_card and acc_post_balance < 0:
+                deficit = abs(acc_post_balance)
+                summary_text = (
+                    f"Warning: This purchase of ₹{price_rupees:,.0f} exceeds your available balance in '{account_name}' (₹{acc_balance:,.0f}) by ₹{deficit:,.0f}. "
+                    f"You do not have sufficient funds in this selected account."
+                )
+            else:
+                deficit = abs(total_post_liquid)
+                summary_text = (
+                    f"Warning: This purchase of ₹{price_rupees:,.0f} exceeds your total liquid spending reserves (₹{total_liquid_available:,.0f}) by ₹{deficit:,.0f}. "
+                    f"It would leave your finances in an overdraft deficit."
+                )
+        elif is_savings_wallet or total_post_liquid < committed_expenses or budget_exceeded or (monthly_expense > 0 and coverage_months < 3.0) or (total_liquid_available > 0 and (price_rupees / total_liquid_available) > 0.5):
             status = 'warning'
+            verdict = 'This purchase may affect your savings.'
+            if is_savings_wallet:
+                summary_text = (
+                    f"Caution: '{account_name}' is a dedicated Savings Goal wallet reserved for '{savings_goal_name}'. "
+                    f"Spending ₹{price_rupees:,.0f} from this wallet will directly reduce your savings goal progress."
+                )
+            elif total_post_liquid < committed_expenses:
+                summary_text = (
+                    f"Caution: After this purchase, your remaining liquid reserve (₹{total_post_liquid:,.0f}) will not be enough to cover your upcoming scheduled bills (₹{committed_expenses:,.0f}). "
+                    f"This purchase may compromise your existing financial commitments."
+                )
+            elif budget_exceeded and budget_info:
+                summary_text = (
+                    f"Caution: This purchase exceeds your monthly budget limit for {budget_info['category_name']} by ₹{abs(budget_info['post_remaining']):,.0f}. "
+                    f"It will push this category's spending past your planned boundary."
+                )
+            elif monthly_expense > 0 and coverage_months < 3.0:
+                summary_text = (
+                    f"Caution: Making this purchase utilizes {pct_of_reserve}% of your liquid reserves, leaving only {coverage_months} months of emergency expense coverage (below the recommended 3 months buffer). "
+                    f"This purchase may affect your financial security."
+                )
+            else:
+                summary_text = (
+                    f"Caution: This purchase consumes {pct_of_reserve}% of your available spending reserves, significantly depleting your current cash cushion."
+                )
         else:
-            summary_text = (
-                f"This purchase is within safe financial bounds! It utilizes {pct_reduction}% of liquid reserves, leaving a strong {coverage_months} months of emergency expense coverage intact. "
-                f"You can fully replenish this expenditure in approximately {recovery_months} months."
-            )
             status = 'safe'
+            verdict = 'You can afford this.'
+            summary_text = (
+                f"You can comfortably afford this! It leaves ₹{acc_post_balance:,.0f} in '{account_name}' and preserves a healthy reserve of ₹{total_post_liquid:,.0f} covering {coverage_months} months of expenses. "
+                f"All scheduled commitments and savings goals remain fully protected."
+            )
 
         return {
             'item_name': item_name,
             'price': price_rupees,
-            'current_reserve': current_reserve,
-            'post_reserve': post_reserve,
+            'account_id': acc_id_str,
+            'account_name': account_name,
+            'account_type': acc_type,
+            'is_credit_card': is_credit_card,
+            'is_savings_wallet': is_savings_wallet,
+            'savings_goal_name': savings_goal_name,
+            'account_balance': acc_balance,
+            'account_post_balance': acc_post_balance,
+            'total_liquid_available': total_liquid_available,
+            'total_post_liquid': total_post_liquid,
+            'current_reserve': total_liquid_available,
+            'post_reserve': total_post_liquid,
+            'savings_wallets_total': savings_wallets_total,
+            'committed_expenses': committed_expenses,
+            'monthly_expense': monthly_expense,
             'coverage_months': coverage_months,
-            'summary_text': summary_text,
-            'status': status
+            'pct_of_reserve': pct_of_reserve,
+            'budget': budget_info,
+            'status': status,
+            'verdict': verdict,
+            'summary_text': summary_text
         }
 
-    def run_what_if_simulation(self, profile_id=1, scenario_type="salary", change_amount_rupees=5000):
+    def run_what_if_simulation(self, profile_id=1, scenario_type="salary", change_amount_rupees=5000, category_id=None):
+        """
+        Runs hypothetical financial simulations against actual profile income, expenses, and savings.
+        Supports scenarios:
+        1. Increase monthly expenses (expense_increase, rent, purchase)
+        2. Income decreases (income_decrease)
+        3. Income increases (salary, income_increase)
+        4. Save a fixed amount every month (extra_savings, fixed_savings)
+        5. Purchase an expensive item (one_time_purchase - lump sum)
+        6. Reduce spending in a category (category_reduction)
+        Calculates:
+        - Current Position vs Simulated Position
+        - Differences in monthly cashflow & balance
+        - Changes in income and expenses
+        - Savings impact & savings rate
+        - 12-month future balance trajectory and goal completion impact.
+        Never modifies actual database records.
+        """
         change_amount_rupees = validate_amount(change_amount_rupees, "Simulation Amount", min_val=0.0)
-        totals = self.get_ledger_totals(profile_id)
-        current_savings = totals['savings']
-        base_income = totals['income']
 
-        if scenario_type in ['salary', 'extra_savings']:
-            simulated_savings = current_savings + change_amount_rupees
-        else: # rent or major recurring cost
-            simulated_savings = max(0.0, current_savings - change_amount_rupees)
+        # Get actual accounts and liquid reserve
+        accounts = self.get_accounts(profile_id)
+        regular_asset_accounts = [a for a in accounts if a['account_type'] != 'credit_card' and not a.get('is_savings_wallet')]
+        liquid_balance = max(0.0, sum(a['current_balance'] for a in regular_asset_accounts))
 
-        curr_rate = round((current_savings / base_income) * 100, 1) if base_income > 0 else 0.0
-        new_income = base_income + (change_amount_rupees if scenario_type == 'salary' else 0)
-        sim_rate = round((simulated_savings / new_income) * 100, 1) if new_income > 0 else 0.0
-
-        curr_annual = current_savings * 12
-        sim_annual = simulated_savings * 12
-
-        # Goal completion timeline calculation
         goals = self.get_goals(profile_id)
-        active_remaining = sum(max(0, g['targetAmount'] - g['currentAmount']) for g in goals if g.get('status') == 'active')
+        active_goals = [g for g in goals if g.get('status') == 'active']
+
+        # Determine monthly income and expense baseline from actual data
+        curr_m = datetime.date.today().strftime('%Y-%m')
+        curr_totals = self.get_ledger_totals(profile_id, month_year=curr_m)
+        all_totals = self.get_ledger_totals(profile_id)
+
+        cal_events = self.get_calendar_events(profile_id)
+        cal_inc = sum(e['amount'] for e in cal_events if e.get('type') == 'income')
+        cal_exp = sum(e['amount'] for e in cal_events if e.get('type') == 'expense' and e.get('status') == 'scheduled')
+
+        base_income = curr_totals['income'] if curr_totals['income'] > 0 else (cal_inc if cal_inc > 0 else all_totals['income'])
+        base_expenses = curr_totals['expenses'] if curr_totals['expenses'] > 0 else (cal_exp if cal_exp > 0 else all_totals['expenses'])
+
+        current_savings = max(0.0, base_income - base_expenses)
+        current_net_cashflow = base_income - base_expenses
+        curr_rate = round((current_savings / base_income) * 100, 1) if base_income > 0 else 0.0
+        curr_annual = current_savings * 12
+
+        # Compute scenario
+        one_time_cost = 0.0
+        if scenario_type in ['salary', 'income_increase']:
+            sim_income = base_income + change_amount_rupees
+            sim_expenses = base_expenses
+            sim_savings = max(0.0, sim_income - sim_expenses)
+            sim_net_cashflow = sim_income - sim_expenses
+            diff_monthly = change_amount_rupees
+            scenario_label = f"Income increases by ₹{change_amount_rupees:,.0f}/month"
+        elif scenario_type == 'income_decrease':
+            sim_income = max(0.0, base_income - change_amount_rupees)
+            sim_expenses = base_expenses
+            sim_savings = max(0.0, sim_income - sim_expenses)
+            sim_net_cashflow = sim_income - sim_expenses
+            diff_monthly = -(base_income - sim_income)
+            scenario_label = f"Income decreases by ₹{change_amount_rupees:,.0f}/month"
+        elif scenario_type in ['expense_increase', 'rent', 'purchase']:
+            sim_income = base_income
+            sim_expenses = base_expenses + change_amount_rupees
+            sim_savings = max(0.0, sim_income - sim_expenses)
+            sim_net_cashflow = sim_income - sim_expenses
+            diff_monthly = -change_amount_rupees
+            scenario_label = f"Monthly expenses increase by ₹{change_amount_rupees:,.0f}/month"
+        elif scenario_type == 'category_reduction':
+            sim_income = base_income
+            sim_expenses = max(0.0, base_expenses - change_amount_rupees)
+            sim_savings = max(0.0, sim_income - sim_expenses)
+            sim_net_cashflow = sim_income - sim_expenses
+            diff_monthly = change_amount_rupees
+            scenario_label = f"Category spending reduced by ₹{change_amount_rupees:,.0f}/month"
+        elif scenario_type in ['extra_savings', 'fixed_savings']:
+            sim_income = base_income
+            sim_savings = current_savings + change_amount_rupees
+            sim_expenses = max(0.0, base_income - sim_savings)
+            sim_net_cashflow = sim_savings
+            diff_monthly = change_amount_rupees
+            scenario_label = f"Save an extra ₹{change_amount_rupees:,.0f}/month"
+        elif scenario_type == 'one_time_purchase':
+            sim_income = base_income
+            sim_expenses = base_expenses
+            sim_savings = current_savings
+            sim_net_cashflow = current_net_cashflow
+            diff_monthly = 0.0
+            one_time_cost = change_amount_rupees
+            scenario_label = f"One-time purchase of ₹{change_amount_rupees:,.0f}"
+        else:
+            sim_income = base_income
+            sim_expenses = base_expenses
+            sim_savings = current_savings
+            sim_net_cashflow = current_net_cashflow
+            diff_monthly = 0.0
+            scenario_label = "No change scenario"
+
+        sim_rate = round((sim_savings / sim_income) * 100, 1) if sim_income > 0 else 0.0
+        sim_annual = sim_savings * 12
+        diff_annual = sim_annual - curr_annual
+
+        # 12-month future balance trajectory
+        months_labels = ['Now'] + [f'Month {m}' for m in range(1, 13)]
+        baseline_trend = [round(liquid_balance + (m * current_net_cashflow), 2) for m in range(13)]
+        if one_time_cost > 0:
+            sim_start = liquid_balance - one_time_cost
+            simulated_trend = [round(sim_start + (m * sim_net_cashflow), 2) for m in range(13)]
+        else:
+            simulated_trend = [round(liquid_balance + (m * sim_net_cashflow), 2) for m in range(13)]
+
+        diff_balance_12m = round(simulated_trend[12] - baseline_trend[12], 2)
+
+        # Goal completion timeline
+        active_remaining = sum(max(0, g.get('targetAmount', 0) - g.get('currentAmount', 0)) for g in active_goals)
         benchmark = active_remaining if active_remaining > 0 else max(50000.0, base_income * 2)
 
-        if simulated_savings > current_savings:
-            if current_savings > 0 and simulated_savings > 0:
-                diff = round(max(0.1, (benchmark / current_savings) - (benchmark / simulated_savings)), 1)
+        if one_time_cost > 0:
+            if current_savings > 0:
+                recovery = round(one_time_cost / current_savings, 1)
+                goal_accel = f"Takes ~{recovery} months of savings to replenish"
+            else:
+                goal_accel = "Zero monthly savings to replenish this purchase"
+            impact = "negative" if one_time_cost > 0 else "neutral"
+        elif sim_savings > current_savings:
+            if current_savings > 0 and sim_savings > 0:
+                diff = round(max(0.1, (benchmark / current_savings) - (benchmark / sim_savings)), 1)
                 goal_accel = f"Accelerated by {diff} Months"
             else:
-                diff = round(max(0.1, benchmark / max(1.0, simulated_savings)), 1)
+                diff = round(max(0.1, benchmark / max(1.0, sim_savings)), 1)
                 goal_accel = f"Accelerated by {diff} Months"
             impact = "positive"
-        elif simulated_savings < current_savings:
-            if simulated_savings > 0 and current_savings > 0:
-                diff = round(max(0.1, (benchmark / simulated_savings) - (benchmark / current_savings)), 1)
+        elif sim_savings < current_savings:
+            if sim_savings > 0 and current_savings > 0:
+                diff = round(max(0.1, (benchmark / sim_savings) - (benchmark / current_savings)), 1)
                 goal_accel = f"Delayed by {diff} Months"
             else:
                 goal_accel = "Indefinitely delayed (Savings eliminated)"
@@ -2061,14 +2340,28 @@ class FinancialService:
 
         return {
             'scenario_type': scenario_type,
+            'scenario_label': scenario_label,
             'change_amount': change_amount_rupees,
             'base_income': base_income,
+            'base_expenses': base_expenses,
+            'sim_income': sim_income,
+            'sim_expenses': sim_expenses,
             'curr_savings': current_savings,
-            'sim_savings': simulated_savings,
+            'sim_savings': sim_savings,
+            'curr_net_cashflow': current_net_cashflow,
+            'sim_net_cashflow': sim_net_cashflow,
+            'diff_monthly': diff_monthly,
             'curr_annual': curr_annual,
             'sim_annual': sim_annual,
+            'diff_annual': diff_annual,
             'curr_rate': f"{curr_rate}%",
             'sim_rate': f"{sim_rate}%",
+            'current_liquid_balance': liquid_balance,
+            'one_time_cost': one_time_cost,
+            'diff_balance_12m': diff_balance_12m,
+            'months_labels': months_labels,
+            'baseline_trend': baseline_trend,
+            'simulated_trend': simulated_trend,
             'goal_accel': goal_accel,
             'impact': impact
         }

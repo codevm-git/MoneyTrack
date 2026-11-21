@@ -184,5 +184,40 @@ class TestApiEndpoints(unittest.TestCase):
             self.assertEqual(res_transfer.status_code, 201)
             self.assertTrue(res_transfer.get_json()['success'])
 
+    def test_simulator_and_affordability_api(self):
+        # 1. Baseline API
+        res_base = self.client.get('/api/simulate/baseline')
+        self.assertEqual(res_base.status_code, 200)
+        base = res_base.get_json()
+        self.assertIn('total_liquid_available', base)
+        self.assertIn('base_income', base)
+        self.assertIn('base_expenses', base)
+        self.assertIn('accounts', base)
+
+        # 2. What-If Simulation API
+        res_sim = self.client.post('/api/simulate/what-if', json={
+            'scenario_type': 'salary',
+            'change_amount': 5000
+        })
+        self.assertEqual(res_sim.status_code, 200)
+        sim = res_sim.get_json()
+        self.assertIn('sim_savings', sim)
+        self.assertIn('baseline_trend', sim)
+        self.assertIn('simulated_trend', sim)
+        self.assertEqual(len(sim['baseline_trend']), 13)
+
+        # 3. Affordability Check API
+        res_aff = self.client.post('/api/simulate/affordability', json={
+            'item_name': 'Test Purchase',
+            'price': 2500
+        })
+        self.assertEqual(res_aff.status_code, 200)
+        aff = res_aff.get_json()
+        self.assertIn('verdict', aff)
+        self.assertIn('status', aff)
+        self.assertIn(aff['status'], ['safe', 'warning', 'critical'])
+        self.assertIn('total_liquid_available', aff)
+        self.assertIn('summary_text', aff)
+
 if __name__ == '__main__':
     unittest.main()
