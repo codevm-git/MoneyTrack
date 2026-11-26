@@ -1729,10 +1729,24 @@ class FinancialService:
                 acc_filter = " AND account_id = ?"
                 acc_params = [aid]
 
-            # 1. Current Month Totals
-            c_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income'" + acc_filter
+            # 1. Available Months for User Profile
+            m_rows = conn.execute("""
+                SELECT DISTINCT strftime('%Y-%m', date) as m
+                FROM transactions
+                WHERE profile_id = ?
+                ORDER BY m DESC;
+            """, (profile_id,)).fetchall()
+            available_months = [r['m'] for r in m_rows if r['m']]
+            if month_year not in available_months:
+                available_months.insert(0, month_year)
+            if today.strftime('%Y-%m') not in available_months:
+                available_months.insert(0, today.strftime('%Y-%m'))
+            available_months = sorted(list(dict.fromkeys(available_months)), reverse=True)
+
+            # 2. Current Month Totals
+            c_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income' AND description NOT LIKE '%Opening Balance%'" + acc_filter
             c_exp_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense'" + acc_filter
-            c_tx_q = "SELECT COUNT(*) as c FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ?" + acc_filter
+            c_tx_q = "SELECT COUNT(*) as c FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type IN ('income', 'expense')" + acc_filter
             c_inc_paise = (conn.execute(c_inc_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
             c_exp_paise = (conn.execute(c_exp_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
             c_tx_count = (conn.execute(c_tx_q, [profile_id, month_year] + acc_params).fetchone()['c'] or 0)
@@ -1740,10 +1754,10 @@ class FinancialService:
             c_savings_paise = max(0, c_net_paise)
             c_savings_rate = round((c_savings_paise / c_inc_paise) * 100, 1) if c_inc_paise > 0 else 0.0
 
-            # 2. Previous Month Totals
-            p_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income'" + acc_filter
+            # 3. Previous Month Totals
+            p_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income' AND description NOT LIKE '%Opening Balance%'" + acc_filter
             p_exp_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense'" + acc_filter
-            p_tx_q = "SELECT COUNT(*) as c FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ?" + acc_filter
+            p_tx_q = "SELECT COUNT(*) as c FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type IN ('income', 'expense')" + acc_filter
             p_inc_paise = (conn.execute(p_inc_q, [profile_id, prev_month_year] + acc_params).fetchone()['s'] or 0)
             p_exp_paise = (conn.execute(p_exp_q, [profile_id, prev_month_year] + acc_params).fetchone()['s'] or 0)
             p_tx_count = (conn.execute(p_tx_q, [profile_id, prev_month_year] + acc_params).fetchone()['c'] or 0)
@@ -1751,7 +1765,11 @@ class FinancialService:
             p_savings_paise = max(0, p_net_paise)
             p_savings_rate = round((p_savings_paise / p_inc_paise) * 100, 1) if p_inc_paise > 0 else 0.0
 
-            # 3. Month-over-Month Deltas
+            has_curr_data = (c_tx_count > 0)
+            has_prev_data = (p_tx_count > 0)
+            has_comparison_data = (has_curr_data and has_prev_data)
+
+            # 4. Month-over-Month Deltas
             inc_delta_paise = c_inc_paise - p_inc_paise
             inc_pct = round((float(inc_delta_paise) / float(p_inc_paise)) * 100, 1) if p_inc_paise > 0 else (100.0 if c_inc_paise > 0 else 0.0)
 
@@ -1797,11 +1815,20 @@ class FinancialService:
             # 5. Dynamic 50/30/20 Rule: Necessary vs Optional
             nec_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND type_tag = 'necessary'" + acc_filter
             opt_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND type_tag = 'optional'" + acc_filter
+            unclass_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND (type_tag IS NULL OR type_tag NOT IN ('necessary', 'optional'))" + acc_filter
+
             nec_paise = (conn.execute(nec_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
             opt_paise = (conn.execute(opt_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
-            tot_tagged_paise = nec_paise + opt_paise
+            unclass_paise = (conn.execute(unclass_q, [profile_id, month_year] + acc_params).fetchone()['s'] or 0)
+            tot_tagged_paise = nec_paise + opt_paise + unclass_paise
+
             nec_pct = round((nec_paise / tot_tagged_paise) * 100, 1) if tot_tagged_paise > 0 else 0.0
             opt_pct = round((opt_paise / tot_tagged_paise) * 100, 1) if tot_tagged_paise > 0 else 0.0
+            unclass_pct = round((unclass_paise / tot_tagged_paise) * 100, 1) if tot_tagged_paise > 0 else 0.0
+
+            p_nec_paise = (conn.execute(nec_q, [profile_id, prev_month_year] + acc_params).fetchone()['s'] or 0)
+            p_opt_paise = (conn.execute(opt_q, [profile_id, prev_month_year] + acc_params).fetchone()['s'] or 0)
+            p_unclass_paise = (conn.execute(unclass_q, [profile_id, prev_month_year] + acc_params).fetchone()['s'] or 0)
 
             # 6. Historical 6-Month Trends for Line Graphs
             trend_months = []
@@ -1814,8 +1841,9 @@ class FinancialService:
                 cursor_dt = first_of_m - datetime.timedelta(days=1)
 
             trend_history = []
+            necessary_optional_trend = []
             for m_str, lbl in trend_months:
-                t_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income'" + acc_filter
+                t_inc_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'income' AND description NOT LIKE '%Opening Balance%'" + acc_filter
                 t_exp_q = "SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense'" + acc_filter
                 t_inc = (conn.execute(t_inc_q, [profile_id, m_str] + acc_params).fetchone()['s'] or 0)
                 t_exp = (conn.execute(t_exp_q, [profile_id, m_str] + acc_params).fetchone()['s'] or 0)
@@ -1830,7 +1858,174 @@ class FinancialService:
                     'net_cashflow': paise_to_rupees(t_net)
                 })
 
-            # 7. Day-by-Day comparison for current vs previous month (Days 1 to 31)
+                n_p = (conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND type_tag = 'necessary'" + acc_filter, [profile_id, m_str] + acc_params).fetchone()['s'] or 0)
+                o_p = (conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND type_tag = 'optional'" + acc_filter, [profile_id, m_str] + acc_params).fetchone()['s'] or 0)
+                u_p = (conn.execute("SELECT SUM(amount_paise) as s FROM transactions WHERE profile_id = ? AND strftime('%Y-%m', date) = ? AND type = 'expense' AND (type_tag IS NULL OR type_tag NOT IN ('necessary', 'optional'))" + acc_filter, [profile_id, m_str] + acc_params).fetchone()['s'] or 0)
+                necessary_optional_trend.append({
+                    'month_key': m_str,
+                    'label': lbl,
+                    'necessary': paise_to_rupees(n_p),
+                    'optional': paise_to_rupees(o_p),
+                    'unclassified': paise_to_rupees(u_p),
+                    'total': paise_to_rupees(n_p + o_p + u_p)
+                })
+
+            # 7. Category Expense Distribution Over Time (Strictly Expenses Only, Line Graph)
+            period_months = [m_str for m_str, _ in trend_months]
+            placeholders = ','.join(['?'] * len(period_months))
+            cat_hist_rows = conn.execute("""
+                SELECT c.id, c.name, c.color, strftime('%Y-%m', t.date) as m_str, SUM(t.amount_paise) as s
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
+                WHERE t.profile_id = ? AND strftime('%Y-%m', t.date) IN (""" + placeholders + """) AND t.type = 'expense'
+                """ + acc_filter + """
+                GROUP BY c.id, m_str;
+            """, [profile_id] + period_months + acc_params).fetchall()
+
+            cat_map = {}
+            for r in cat_hist_rows:
+                cid = r['id']
+                if cid not in cat_map:
+                    cat_map[cid] = {
+                        'id': cid,
+                        'name': r['name'],
+                        'color': r['color'] or '#3b82f6',
+                        'month_spents': {},
+                        'total_period_paise': 0
+                    }
+                cat_map[cid]['month_spents'][r['m_str']] = r['s']
+                cat_map[cid]['total_period_paise'] += r['s']
+
+            category_trends = {
+                'labels': [lbl for _, lbl in trend_months],
+                'month_keys': [m_str for m_str, _ in trend_months],
+                'datasets': []
+            }
+            for cid, cinfo in sorted(cat_map.items(), key=lambda x: x[1]['total_period_paise'], reverse=True):
+                if cinfo['total_period_paise'] > 0:
+                    category_trends['datasets'].append({
+                        'id': cinfo['id'],
+                        'name': cinfo['name'],
+                        'color': cinfo['color'],
+                        'amounts': [paise_to_rupees(cinfo['month_spents'].get(m_str, 0)) for m_str, _ in trend_months],
+                        'total': paise_to_rupees(cinfo['total_period_paise'])
+                    })
+
+            # 8. "What Changed?" Dynamic Plain-English Insights
+            insights = []
+            if not has_curr_data and not has_prev_data:
+                has_comparison_data = False
+                comparison_message = "No transactions found for the selected period. Start logging expenses to see real-time financial insights."
+            elif not has_prev_data:
+                has_comparison_data = False
+                comparison_message = f"No transactions recorded for {prev_dt.strftime('%B %Y')} to compare against. Next month, personalized spending change insights will appear here."
+            elif not has_curr_data:
+                has_comparison_data = False
+                comparison_message = f"No transactions recorded yet for {curr_dt.strftime('%B %Y')}. Log your expenses to see how your spending changed compared to {prev_dt.strftime('%B %Y')}."
+            else:
+                has_comparison_data = True
+                comparison_message = f"Comparing your actual spending in {curr_dt.strftime('%B %Y')} with {prev_dt.strftime('%B %Y')}."
+
+                # Total expense change
+                c_exp_rupees = paise_to_rupees(c_exp_paise)
+                p_exp_rupees = paise_to_rupees(p_exp_paise)
+                exp_diff = c_exp_rupees - p_exp_rupees
+                if exp_diff > 0:
+                    pct_str = f" (+{exp_pct}%)" if p_exp_rupees > 0 else ""
+                    insights.append({
+                        'type': 'expense_increase',
+                        'severity': 'negative',
+                        'text': f"You spent {curr}{exp_diff:,.0f} more than last month{pct_str}."
+                    })
+                elif exp_diff < 0:
+                    pct_str = f" ({exp_pct}%)" if p_exp_rupees > 0 else ""
+                    insights.append({
+                        'type': 'expense_decrease',
+                        'severity': 'positive',
+                        'text': f"You spent {curr}{abs(exp_diff):,.0f} less than last month{pct_str}."
+                    })
+                else:
+                    insights.append({
+                        'type': 'expense_neutral',
+                        'severity': 'neutral',
+                        'text': "Your total spending was identical to last month."
+                    })
+
+                # Optional spending shift
+                c_opt_rupees = paise_to_rupees(opt_paise)
+                p_opt_rupees = paise_to_rupees(p_opt_paise)
+                opt_diff = c_opt_rupees - p_opt_rupees
+                if opt_diff < 0:
+                    insights.append({
+                        'type': 'optional_decrease',
+                        'severity': 'positive',
+                        'text': f"Your optional spending decreased by {curr}{abs(opt_diff):,.0f} compared to last month."
+                    })
+                elif opt_diff > 0:
+                    insights.append({
+                        'type': 'optional_increase',
+                        'severity': 'warning',
+                        'text': f"Your optional spending increased by {curr}{opt_diff:,.0f} compared to last month."
+                    })
+
+                # Necessary spending shift
+                c_nec_rupees = paise_to_rupees(nec_paise)
+                p_nec_rupees = paise_to_rupees(p_nec_paise)
+                nec_diff = c_nec_rupees - p_nec_rupees
+                if nec_diff > 0 and (p_nec_rupees > 0 or c_nec_rupees > 0):
+                    insights.append({
+                        'type': 'necessary_increase',
+                        'severity': 'neutral',
+                        'text': f"Essential living expenses increased by {curr}{nec_diff:,.0f}."
+                    })
+                elif nec_diff < 0 and (p_nec_rupees > 0 or c_nec_rupees > 0):
+                    insights.append({
+                        'type': 'necessary_decrease',
+                        'severity': 'positive',
+                        'text': f"Essential living expenses decreased by {curr}{abs(nec_diff):,.0f}."
+                    })
+
+                # Category-specific shifts
+                for cd in category_deltas:
+                    if cd['delta'] > 0 and cd['last_month'] > 0 and cd['delta'] >= 100:
+                        insights.append({
+                            'type': 'category_increase',
+                            'severity': 'warning',
+                            'text': f"Your {cd['name']} spending increased by {cd['delta_pct']:.0f}% (+{curr}{cd['delta']:,.0f})."
+                        })
+                        break
+                for cd in category_deltas:
+                    if cd['delta'] < 0 and cd['last_month'] > 0 and abs(cd['delta']) >= 100:
+                        insights.append({
+                            'type': 'category_decrease',
+                            'severity': 'positive',
+                            'text': f"You spent {curr}{abs(cd['delta']):,.0f} less on {cd['name']} this month ({cd['delta_pct']:.0f}%)."
+                        })
+                        break
+                for cd in category_deltas:
+                    if cd['last_month'] == 0 and cd['this_month'] > 0 and cd['this_month'] >= 100:
+                        insights.append({
+                            'type': 'category_new',
+                            'severity': 'neutral',
+                            'text': f"New spending in {cd['name']} totaled {curr}{cd['this_month']:,.0f} this month."
+                        })
+                        break
+
+            what_changed = {
+                'has_comparison_data': has_comparison_data,
+                'comparison_message': comparison_message,
+                'insights': insights,
+                'metrics': {
+                    'expense_delta': paise_to_rupees(exp_delta_paise),
+                    'expense_delta_pct': exp_pct,
+                    'necessary_delta': paise_to_rupees(nec_paise - p_nec_paise),
+                    'optional_delta': paise_to_rupees(opt_paise - p_opt_paise),
+                    'savings_delta': paise_to_rupees(sav_delta_paise),
+                    'net_delta': paise_to_rupees(net_delta_paise)
+                }
+            }
+
+            # 9. Day-by-Day comparison for current vs previous month (Days 1 to 31)
             curr_daily_rows = conn.execute("""
                 SELECT strftime('%d', date) as day_num, type, SUM(amount_paise) as s
                 FROM transactions
